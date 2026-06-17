@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import PageSkeleton from "@/components/ui/PageSkeleton";
 import { RemittanceTable } from "./RemittanceTable";
 import RemittanceSearch from "./RemittanceSearch";
+import ExportCsvButton from "@/components/ui/ExportCsvButton";
 
 export default async function RemittancePage({
   searchParams,
@@ -22,6 +23,9 @@ export default async function RemittancePage({
         </div>
         <div className="flex items-center gap-3">
           <RemittanceSearch />
+          <ExportCsvButton
+            href={`/api/export/remittance${q ? `?q=${encodeURIComponent(q)}` : ""}`}
+          />
           <Link
             href="/imports"
             className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
