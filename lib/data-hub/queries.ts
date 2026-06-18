@@ -4,15 +4,32 @@ export type Project = {
   id: string;
   project_id: string;
   opportunity_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
   phone: string | null;
+  address_line1: string | null;
+  city: string | null;
+  state_code: string | null;
+  postal_code: string | null;
   project_stage: string | null;
-  sales_advisor_name: string | null;
-  setter_name: string | null;
-  setter_email: string | null;
+  contract_signed_date: string | null;
   total_system_cost: number | null;
   system_size_kw: number | null;
+  sales_advisor_name: string | null;
+  sales_advisor_email: string | null;
+  setter_name: string | null;
+  setter_email: string | null;
+  closer_name: string | null;
+  closer_email: string | null;
+  market: string | null;
+  team: string | null;
+  region: string | null;
+  division: string | null;
+  dealer_name: string | null;
+  office_name: string | null;
   terros_account_id: string | null;
+  sequifi_sale_id: string | null;
   updated_at: string;
 };
 
@@ -20,9 +37,7 @@ export async function listProjects(limit = 100, search?: string): Promise<Projec
   const db = createServerSupabase();
   let query = db
     .from("projects")
-    .select(
-      "id, project_id, opportunity_name, email, phone, project_stage, sales_advisor_name, setter_name, setter_email, total_system_cost, system_size_kw, terros_account_id, updated_at"
-    )
+    .select("*")
     .order("updated_at", { ascending: false })
     .limit(limit);
 
