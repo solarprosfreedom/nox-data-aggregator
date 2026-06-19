@@ -23,7 +23,7 @@ function Num({ v }: { v: unknown }) {
   return <>{n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>;
 }
 
-function TH({ children }: { children: React.ReactNode }) {
+function TH({ children }: { children?: React.ReactNode }) {
   return <th className="whitespace-nowrap px-3 py-3 font-medium">{children}</th>;
 }
 
