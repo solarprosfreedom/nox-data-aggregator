@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       .select(`project_id, ${REMITTANCE_EXPORT_COLUMNS.join(", ")}`)
       .in("project_id", ids)
       .order("payment_date", { ascending: false });
-    for (const row of (remitData ?? []) as Record<string, unknown>[]) {
+    for (const row of (remitData ?? []) as unknown as Record<string, unknown>[]) {
       const pid = row.project_id as string | null;
       if (pid && !latestRemit.has(pid)) latestRemit.set(pid, row);
     }
