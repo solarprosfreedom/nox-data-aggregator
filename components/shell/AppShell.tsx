@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOutAction } from "@/app/login/actions";
 
@@ -71,13 +72,13 @@ export default function AppShell({
       <aside className="flex w-56 flex-col border-r border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-5">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-600 text-sm font-bold text-white">
-              N
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Data Hub</p>
-              <p className="text-xs text-slate-500">NOX PWR</p>
-            </div>
+            <Image
+              src="/logo.png"
+              alt="NOX PWR"
+              width={120}
+              height={34}
+              className="h-[34px] w-auto object-contain"
+            />
           </div>
         </div>
         <nav className="flex-1 space-y-1 p-3">

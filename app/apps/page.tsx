@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import {
   getCurrentProfile,
@@ -61,10 +62,8 @@ export default async function AppsPage() {
                 href={card.href}
                 className="rounded-2xl bg-white p-6 shadow-xl transition hover:scale-[1.02]"
               >
-                <div
-                  className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${card.color} text-white font-bold`}
-                >
-                  N
+                <div className="mb-4">
+                  <Image src="/logo.png" alt="NOX PWR" width={160} height={46} className="h-[46px] w-auto object-contain" />
                 </div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   {card.title}
@@ -79,10 +78,8 @@ export default async function AppsPage() {
                 <span className="absolute right-4 top-4 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                   Under Development
                 </span>
-                <div
-                  className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${card.color} text-white font-bold`}
-                >
-                  N
+                <div className="mb-4">
+                  <Image src="/logo.png" alt="NOX PWR" width={160} height={46} className="h-[46px] w-auto object-contain" />
                 </div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   {card.title}
@@ -95,10 +92,8 @@ export default async function AppsPage() {
                 href={card.href}
                 className="rounded-2xl bg-white p-6 shadow-xl transition hover:scale-[1.02]"
               >
-                <div
-                  className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${card.color} text-white font-bold`}
-                >
-                  N
+                <div className="mb-4">
+                  <Image src="/logo.png" alt="NOX PWR" width={160} height={46} className="h-[46px] w-auto object-contain" />
                 </div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   {card.title}

@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NOX Data Hub",
   description: "Import and consolidate project, Terros, and remittance data",
+  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({
