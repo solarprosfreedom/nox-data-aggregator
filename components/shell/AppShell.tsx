@@ -6,10 +6,14 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { signOutAction } from "@/app/login/actions";
 
-const NAV = [
+const ADMIN_NAV = [
   { href: "/projects", label: "Projects" },
   { href: "/imports", label: "Import" },
   { href: "/imports/history", label: "History" },
+];
+
+const MEMBER_NAV = [
+  { href: "/projects", label: "Projects" },
 ];
 
 function NavLinkInner({ label }: { label: string }) {
@@ -52,11 +56,14 @@ function NavItem({
 export default function AppShell({
   children,
   email,
+  isAdmin = false,
 }: {
   children: ReactNode;
   email?: string;
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
+  const NAV = isAdmin ? ADMIN_NAV : MEMBER_NAV;
 
   return (
     <div className="flex min-h-screen">
@@ -93,6 +100,13 @@ export default function AppShell({
               />
             );
           })}
+          {isAdmin && (
+            <NavItem
+              href="/admin"
+              label="User Access"
+              active={pathname === "/admin"}
+            />
+          )}
         </nav>
         <div className="border-t border-slate-200 p-3">
           <p className="truncate px-3 text-xs text-slate-400">{email}</p>

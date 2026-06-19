@@ -39,12 +39,16 @@ export async function ProjectsTable({
   search,
   page = 1,
   pageSize = 25,
+  userEmail,
+  isAdmin = true,
 }: {
   search?: string;
   page?: number;
   pageSize?: number;
+  userEmail?: string;
+  isAdmin?: boolean;
 }) {
-  const { rows: projects, total } = await listProjectsPaged({ page, pageSize, search });
+  const { rows: projects, total } = await listProjectsPaged({ page, pageSize, search, userEmail });
 
   return (
     <>
@@ -132,7 +136,7 @@ export async function ProjectsTable({
                 <TH>Clawback</TH>
                 <TH>Others</TH>
                 <TH>Total SP Paid</TH>
-                <TH></TH>
+                {isAdmin && <TH></TH>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -213,12 +217,14 @@ export async function ProjectsTable({
                   <TD><Money v={p.remittance?.clawback} /></TD>
                   <TD><Money v={p.remittance?.others} /></TD>
                   <TD><Money v={p.remittance?.total_sp_paid} /></TD>
-                  <td className="whitespace-nowrap px-2 py-2">
-                    <div className="flex items-center gap-1">
-                      <EditProjectDrawer project={p} />
-                      <DeleteProjectButton id={p.id} label={p.opportunity_name ?? p.project_id} />
-                    </div>
-                  </td>
+                  {isAdmin && (
+                    <td className="whitespace-nowrap px-2 py-2">
+                      <div className="flex items-center gap-1">
+                        <EditProjectDrawer project={p} />
+                        <DeleteProjectButton id={p.id} label={p.opportunity_name ?? p.project_id} />
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

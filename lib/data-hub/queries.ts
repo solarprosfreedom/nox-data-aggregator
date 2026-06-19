@@ -146,6 +146,7 @@ export async function listProjectsPaged(opts: {
   page: number;
   pageSize: number;
   search?: string;
+  userEmail?: string; // when set, filters to projects where setter_email or closer_email matches
 }): Promise<{ rows: ProjectWithRemittance[]; total: number }> {
   const db = createServerSupabase();
   const page = Math.max(1, opts.page);
@@ -157,6 +158,13 @@ export async function listProjectsPaged(opts: {
     .select("*", { count: "exact" })
     .order("updated_at", { ascending: false })
     .range(from, to);
+
+  // Non-admin users only see their own projects (setter or closer).
+  if (opts.userEmail) {
+    query = query.or(
+      `setter_email.ilike.${opts.userEmail},closer_email.ilike.${opts.userEmail},sales_advisor_email.ilike.${opts.userEmail}`
+    );
+  }
 
   if (opts.search) {
     query = query.or(

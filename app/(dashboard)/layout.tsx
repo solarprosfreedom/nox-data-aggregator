@@ -23,7 +23,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <AppShell email={profile.email}>
+    <AppShell email={profile.email} isAdmin={profile.role === "admin"}>
       <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
     </AppShell>
   );
