@@ -8,12 +8,12 @@ import { signOutAction } from "@/app/login/actions";
 
 const ADMIN_NAV = [
   { href: "/projects", label: "Projects" },
-  { href: "/imports", label: "Import" },
+  { href: "/imports", label: "Import", exact: true },
   { href: "/imports/history", label: "History" },
 ];
 
 const MEMBER_NAV = [
-  { href: "/projects", label: "Projects" },
+  { href: "/projects", label: "Projects", exact: true },
 ];
 
 function NavLinkInner({ label }: { label: string }) {
@@ -37,6 +37,7 @@ function NavItem({
   href: string;
   label: string;
   active: boolean;
+  exact?: boolean;
 }) {
   return (
     <Link
@@ -88,9 +89,9 @@ export default function AppShell({
             ← All apps
           </Link>
           {NAV.map((item) => {
-            const active =
-              pathname === item.href ||
-              pathname.startsWith(item.href + "/");
+            const active = item.exact
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <NavItem
                 key={item.href}

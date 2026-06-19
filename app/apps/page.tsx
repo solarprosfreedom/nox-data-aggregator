@@ -34,7 +34,8 @@ export default async function AppsPage() {
       color: "bg-cyan-600",
       internal: true,
     },
-  ].filter((c) => c.enabled);
+  // Always show under-development cards even without explicit access.
+  ].filter((c) => c.enabled || ("underDevelopment" in c && c.underDevelopment));
 
   if (cards.length === 1 && cards[0]?.internal) {
     redirect("/projects");
