@@ -23,6 +23,7 @@ export default async function AppsPage() {
       href: urls.crm,
       enabled: apps.includes("nox-crm"),
       color: "bg-orange-600",
+      underDevelopment: true,
     },
     {
       slug: "nox-data-hub" as const,
@@ -69,6 +70,24 @@ export default async function AppsPage() {
                 </h2>
                 <p className="mt-2 text-sm text-slate-500">{card.description}</p>
               </Link>
+            ) : "underDevelopment" in card && card.underDevelopment ? (
+              <div
+                key={card.slug}
+                className="relative rounded-2xl bg-white p-6 shadow-xl opacity-60 cursor-not-allowed"
+              >
+                <span className="absolute right-4 top-4 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                  Under Development
+                </span>
+                <div
+                  className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${card.color} text-white font-bold`}
+                >
+                  N
+                </div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {card.title}
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">{card.description}</p>
+              </div>
             ) : (
               <a
                 key={card.slug}

@@ -17,6 +17,7 @@ export default function ProjectsSearch() {
     } else {
       params.delete("q");
     }
+    params.delete("page");
     startTransition(() => {
       router.replace(`${pathname}?${params.toString()}`);
     });

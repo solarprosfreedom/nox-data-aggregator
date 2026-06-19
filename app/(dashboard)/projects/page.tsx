@@ -4,13 +4,17 @@ import PageSkeleton from "@/components/ui/PageSkeleton";
 import { ProjectsTable } from "./ProjectsTable";
 import ProjectsSearch from "./ProjectsSearch";
 import ExportCsvButton from "@/components/ui/ExportCsvButton";
+import SyncSettersButton from "./SyncSettersButton";
+import SequifiSyncInlineButton from "./SequifiSyncInlineButton";
 
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, page: pageParam, pageSize: pageSizeParam } = await searchParams;
+  const page = Math.max(1, Number(pageParam) || 1);
+  const pageSize = [25, 50, 100].includes(Number(pageSizeParam)) ? Number(pageSizeParam) : 25;
 
   return (
     <div>
@@ -18,6 +22,8 @@ export default async function ProjectsPage({
         <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
         <div className="flex items-center gap-3">
           <ProjectsSearch />
+          <SyncSettersButton />
+          <SequifiSyncInlineButton />
           <ExportCsvButton
             href={`/api/export/projects${q ? `?q=${encodeURIComponent(q)}` : ""}`}
           />
@@ -30,8 +36,8 @@ export default async function ProjectsPage({
         </div>
       </div>
 
-      <Suspense fallback={<PageSkeleton />}>
-        <ProjectsTable search={q} />
+      <Suspense key={`${q ?? ""}-${page}-${pageSize}`} fallback={<PageSkeleton />}>
+        <ProjectsTable search={q} page={page} pageSize={pageSize} />
       </Suspense>
     </div>
   );

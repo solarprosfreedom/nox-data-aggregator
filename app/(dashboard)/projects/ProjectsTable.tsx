@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { listProjects, countProjects } from "@/lib/data-hub/queries";
+import { listProjectsPaged } from "@/lib/data-hub/queries";
+import Pagination from "@/components/ui/Pagination";
+import EditProjectDrawer from "./EditProjectDrawer";
+import DeleteProjectButton from "./DeleteProjectButton";
 
 function Str({ v }: { v: unknown }) {
   if (v == null || v === "") return <span className="text-slate-300">—</span>;
@@ -11,6 +14,13 @@ function Money({ v }: { v: unknown }) {
   const n = Number(v);
   if (isNaN(n)) return <span className="text-slate-300">—</span>;
   return <>${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>;
+}
+
+function Num({ v }: { v: unknown }) {
+  if (v == null) return <span className="text-slate-300">—</span>;
+  const n = Number(v);
+  if (isNaN(n)) return <>{String(v)}</>;
+  return <>{n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>;
 }
 
 function TH({ children }: { children: React.ReactNode }) {
@@ -25,17 +35,22 @@ function TD({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
   );
 }
 
-export async function ProjectsTable({ search }: { search?: string }) {
-  const [projects, total] = await Promise.all([
-    listProjects(500, search),
-    countProjects(),
-  ]);
+export async function ProjectsTable({
+  search,
+  page = 1,
+  pageSize = 25,
+}: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const { rows: projects, total } = await listProjectsPaged({ page, pageSize, search });
 
   return (
     <>
       <p className="mb-4 text-sm text-slate-500">
         {search
-          ? `${projects.length} result${projects.length === 1 ? "" : "s"} for "${search}" (of ${total} total)`
+          ? `${total} result${total === 1 ? "" : "s"} for "${search}"`
           : `${total} consolidated project${total === 1 ? "" : "s"}`}
       </p>
 
@@ -53,11 +68,12 @@ export async function ProjectsTable({ search }: { search?: string }) {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm" style={{ maxHeight: "calc(100vh - 180px)" }}>
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 {/* Identity */}
+                <TH>#</TH>
                 <TH>Project ID</TH>
                 <TH>Customer</TH>
                 <TH>Email</TH>
@@ -73,14 +89,59 @@ export async function ProjectsTable({ search }: { search?: string }) {
                 <TH>System Size</TH>
                 <TH>Total Cost</TH>
                 {/* People */}
-                <TH>Setter</TH>
-                <TH>Advisor</TH>
+                <TH>Owner / Setter</TH>
+                <TH>Closer</TH>
+                {/* Org */}
+                <TH>Installer</TH>
+                {/* Remittance (latest) */}
+                <TH>Pmt Date</TH>
+                <TH>Remit Status</TH>
+                <TH>Finance Type</TH>
+                <TH>Financier</TH>
+                <TH>Utility</TH>
+                <TH>PV Size</TH>
+                <TH>Redline Tier</TH>
+                <TH>Contract Amt</TH>
+                <TH>Gross PPW</TH>
+                <TH>PPW</TH>
+                <TH>Finance Fee</TH>
+                <TH>Cash Deal</TH>
+                <TH>Battery</TH>
+                <TH>Adder Amt</TH>
+                <TH>Adder Detail</TH>
+                <TH>Post-Sale WO</TH>
+                <TH>Post-Sale Adders</TH>
+                <TH>PV Only Price</TH>
+                <TH>Down Pmt</TH>
+                <TH>SPIF</TH>
+                <TH>TPO Rebate</TH>
+                <TH>ETQA</TH>
+                <TH>Enfin DCA</TH>
+                <TH>Light Reach DCA</TH>
+                <TH>Partner Comm</TH>
+                <TH>Partner Incentive</TH>
+                <TH>Re-Payment</TH>
+                <TH>C0</TH>
+                <TH>C1</TH>
+                <TH>C2</TH>
+                <TH>Adj C2</TH>
+                <TH>C0 Paid</TH>
+                <TH>C1 Paid</TH>
+                <TH>C2 Paid</TH>
+                <TH>Incentive Paid</TH>
+                <TH>Clawback</TH>
+                <TH>Others</TH>
+                <TH>Total SP Paid</TH>
+                <TH></TH>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {projects.map((p) => (
+              {projects.map((p, i) => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   {/* Identity */}
+                  <TD mono>
+                    <span className="text-slate-400">{(page - 1) * pageSize + i + 1}</span>
+                  </TD>
                   <TD mono>
                     <Link
                       href={`/projects/${p.id}`}
@@ -110,12 +171,63 @@ export async function ProjectsTable({ search }: { search?: string }) {
                   <TD><Money v={p.total_system_cost} /></TD>
                   {/* People */}
                   <TD><Str v={p.setter_name} /></TD>
-                  <TD><Str v={p.sales_advisor_name} /></TD>
+                  <TD><Str v={p.closer_name} /></TD>
+                  {/* Org */}
+                  <TD><Str v={p.installer} /></TD>
+                  {/* Remittance (latest) */}
+                  <TD><Str v={p.remittance?.payment_date} /></TD>
+                  <TD><Str v={p.remittance?.status} /></TD>
+                  <TD><Str v={p.remittance?.finance_type} /></TD>
+                  <TD><Str v={p.remittance?.financier} /></TD>
+                  <TD><Str v={p.remittance?.utility_provider} /></TD>
+                  <TD><Num v={p.remittance?.pv_size} /></TD>
+                  <TD><Money v={p.remittance?.redline_price_tier} /></TD>
+                  <TD><Money v={p.remittance?.contract_amount} /></TD>
+                  <TD><Money v={p.remittance?.gross_ppw} /></TD>
+                  <TD><Money v={p.remittance?.ppw} /></TD>
+                  <TD><Money v={p.remittance?.finance_fee} /></TD>
+                  <TD><Money v={p.remittance?.cash_deal_value} /></TD>
+                  <TD><Money v={p.remittance?.battery_price} /></TD>
+                  <TD><Money v={p.remittance?.adder_amount} /></TD>
+                  <TD><Str v={p.remittance?.contract_adder_detail} /></TD>
+                  <TD><Money v={p.remittance?.post_sale_adder_work_order} /></TD>
+                  <TD><Money v={p.remittance?.post_sale_adders} /></TD>
+                  <TD><Money v={p.remittance?.pv_only_price} /></TD>
+                  <TD><Money v={p.remittance?.down_payment} /></TD>
+                  <TD><Money v={p.remittance?.spif} /></TD>
+                  <TD><Money v={p.remittance?.tpo_rebate} /></TD>
+                  <TD><Money v={p.remittance?.etqa} /></TD>
+                  <TD><Money v={p.remittance?.enfin_dca} /></TD>
+                  <TD><Money v={p.remittance?.light_reach_dca} /></TD>
+                  <TD><Money v={p.remittance?.partner_commission} /></TD>
+                  <TD><Money v={p.remittance?.partner_incentive} /></TD>
+                  <TD><Money v={p.remittance?.re_payment} /></TD>
+                  <TD><Money v={p.remittance?.c0} /></TD>
+                  <TD><Money v={p.remittance?.c1} /></TD>
+                  <TD><Money v={p.remittance?.c2} /></TD>
+                  <TD><Money v={p.remittance?.adjusted_c2} /></TD>
+                  <TD><Money v={p.remittance?.c0_paid} /></TD>
+                  <TD><Money v={p.remittance?.c1_paid} /></TD>
+                  <TD><Money v={p.remittance?.c2_paid} /></TD>
+                  <TD><Money v={p.remittance?.incentive_paid} /></TD>
+                  <TD><Money v={p.remittance?.clawback} /></TD>
+                  <TD><Money v={p.remittance?.others} /></TD>
+                  <TD><Money v={p.remittance?.total_sp_paid} /></TD>
+                  <td className="whitespace-nowrap px-2 py-2">
+                    <div className="flex items-center gap-1">
+                      <EditProjectDrawer project={p} />
+                      <DeleteProjectButton id={p.id} label={p.opportunity_name ?? p.project_id} />
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {projects.length > 0 && (
+        <Pagination page={page} pageSize={pageSize} total={total} />
       )}
     </>
   );

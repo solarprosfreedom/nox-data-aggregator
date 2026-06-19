@@ -8,9 +8,7 @@ import { signOutAction } from "@/app/login/actions";
 
 const NAV = [
   { href: "/projects", label: "Projects" },
-  { href: "/remittance", label: "Remittance" },
-  { href: "/samples", label: "Field Mapper" },
-  { href: "/imports", label: "Import projects" },
+  { href: "/imports", label: "Import" },
   { href: "/imports/history", label: "History" },
 ];
 

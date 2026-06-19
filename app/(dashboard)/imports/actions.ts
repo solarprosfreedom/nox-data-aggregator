@@ -57,7 +57,6 @@ export async function uploadImportFile(formData: FormData): Promise<UploadResult
     });
 
     revalidatePath("/projects");
-    revalidatePath("/remittance");
     revalidatePath("/imports/history");
 
     return {

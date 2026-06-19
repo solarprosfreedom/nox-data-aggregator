@@ -27,6 +27,7 @@ export const PROJECT_FIELDS = [
   { key: "division",               label: "Division" },
   { key: "dealer_name",            label: "Dealer Name" },
   { key: "office_name",            label: "Office Name" },
+  { key: "installer",              label: "Installer / Dealer" },
 ] as const;
 
 export const REMITTANCE_FIELDS = [
@@ -122,6 +123,7 @@ const PROJECT_KEYWORDS: Record<string, string[]> = {
   division:             ["division"],
   dealer_name:          ["dealer name", "dealer", "installer"],
   office_name:          ["office name", "office"],
+  installer:            ["installer", "dealer name", "dealer", "sales partner", "partner name"],
 };
 
 const REMITTANCE_KEYWORDS: Record<string, string[]> = {

@@ -178,7 +178,6 @@ export async function importWithMapping(
   }
 
   revalidatePath("/projects");
-  revalidatePath("/remittance");
 
   return {
     inserted,
