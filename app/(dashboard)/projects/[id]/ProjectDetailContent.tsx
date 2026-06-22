@@ -29,6 +29,16 @@ function Field({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+function formatUsPhone(value: unknown): string {
+  if (value == null || value === "") return "—";
+  const raw = String(value).trim();
+  const digits = raw.replace(/\D/g, "");
+  const normalized =
+    digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (normalized.length !== 10) return raw;
+  return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6)}`;
+}
+
 function MoneyField({ label, value }: { label: string; value: unknown }) {
   const n = value == null ? null : Number(value);
   const display =
@@ -70,7 +80,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <Section title="Contact">
           <Field label="Email" value={p.email} />
-          <Field label="Phone" value={p.phone} />
+          <Field label="Phone" value={formatUsPhone(p.phone)} />
           <Field
             label="Address"
             value={[p.address_line1, p.city, p.state_code, p.postal_code]

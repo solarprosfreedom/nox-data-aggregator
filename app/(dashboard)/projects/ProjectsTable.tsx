@@ -9,6 +9,16 @@ function Str({ v }: { v: unknown }) {
   return <>{String(v)}</>;
 }
 
+function Phone({ v }: { v: unknown }) {
+  if (v == null || v === "") return <span className="text-slate-300">—</span>;
+  const raw = String(v).trim();
+  const digits = raw.replace(/\D/g, "");
+  const normalized =
+    digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (normalized.length !== 10) return <>{raw}</>;
+  return <>({normalized.slice(0, 3)}) {normalized.slice(3, 6)}-{normalized.slice(6)}</>;
+}
+
 function Money({ v }: { v: unknown }) {
   if (v == null) return <span className="text-slate-300">—</span>;
   const n = Number(v);
@@ -160,7 +170,7 @@ export async function ProjectsTable({
                     </span>
                   </TD>
                   <TD><Str v={p.email} /></TD>
-                  <TD><Str v={p.phone} /></TD>
+                  <TD><Phone v={p.phone} /></TD>
                   {/* Address */}
                   <TD><Str v={p.address_line1} /></TD>
                   <TD><Str v={p.city} /></TD>
