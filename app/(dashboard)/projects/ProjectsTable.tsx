@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { listProjectsPaged } from "@/lib/data-hub/queries";
-import Pagination from "@/components/ui/Pagination";
 import SortableHeader from "@/components/ui/SortableHeader";
 import type { ProjectSortColumn } from "@/lib/data-hub/project-sort";
 import { computeGrossPpw, computeNetPpw } from "@/lib/data-hub/ppw";
+import ProjectsListClient from "./ProjectsListClient";
 import EditProjectDrawer from "./EditProjectDrawer";
 import DeleteProjectButton from "./DeleteProjectButton";
 
@@ -119,13 +119,15 @@ export async function ProjectsTable({
   });
 
   return (
-    <>
-      <p className="mb-4 text-sm text-slate-500">
-        {search
-          ? `${total} result${total === 1 ? "" : "s"} for "${search}"`
-          : `${total} consolidated project${total === 1 ? "" : "s"}`}
-      </p>
-
+    <ProjectsListClient
+      serverPage={page}
+      serverPageSize={pageSize}
+      serverSort={sort}
+      serverSortDir={sortDir}
+      serverSearch={search}
+      total={total}
+      tableMode={projects.length > 0}
+    >
       {projects.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
           <p className="text-slate-600">No projects yet.</p>
@@ -140,8 +142,7 @@ export async function ProjectsTable({
           </Link>
         </div>
       ) : (
-        <div className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm" style={{ maxHeight: "calc(100vh - 180px)" }}>
-          <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm">
             <thead className="sticky top-0 z-10 bg-white text-left text-xs text-slate-600">
               <tr>
                 {/* Identity */}
@@ -320,12 +321,7 @@ export async function ProjectsTable({
               ))}
             </tbody>
           </table>
-        </div>
       )}
-
-      {projects.length > 0 && (
-        <Pagination page={page} pageSize={pageSize} total={total} />
-      )}
-    </>
+    </ProjectsListClient>
   );
 }

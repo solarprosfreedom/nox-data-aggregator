@@ -99,6 +99,23 @@ async function attachRemittance(
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
+  const { data: rpcData, error: rpcError } = await db.rpc(
+    "latest_remittance_for_projects",
+    { project_ids: ids }
+  );
+
+  if (!rpcError && rpcData) {
+    const byProject = new Map<string, RemittanceSummary>();
+    for (const raw of (rpcData ?? []) as Record<string, unknown>[]) {
+      const pid = raw.project_id as string | null;
+      if (pid && !byProject.has(pid)) {
+        const { project_id: _ignored, id: _id, ...summary } = raw;
+        byProject.set(pid, summary as RemittanceSummary);
+      }
+    }
+    return rows.map((r) => ({ ...r, remittance: byProject.get(r.id) ?? null }));
+  }
+
   const { data, error } = await db
     .from("remittance")
     .select(REMITTANCE_MERGE_COLUMNS)
@@ -106,7 +123,6 @@ async function attachRemittance(
     .order("payment_date", { ascending: false });
 
   if (error) {
-    // remittance table may be absent; degrade gracefully.
     return rows.map((r) => ({ ...r, remittance: null }));
   }
 

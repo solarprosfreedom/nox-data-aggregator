@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { Suspense } from "react";
-import PageSkeleton from "@/components/ui/PageSkeleton";
 import { ProjectsTable } from "./ProjectsTable";
 import ProjectsSearch from "./ProjectsSearch";
 import ExportCsvButton from "@/components/ui/ExportCsvButton";
@@ -54,20 +52,15 @@ export default async function ProjectsPage({
         </div>
       </div>
 
-      <Suspense
-        key={`${q ?? ""}-${page}-${pageSize}-${column}-${ascending ? "asc" : "desc"}`}
-        fallback={<PageSkeleton />}
-      >
-        <ProjectsTable
-          search={q}
-          page={page}
-          pageSize={pageSize}
-          sort={column}
-          sortDir={ascending ? "asc" : "desc"}
-          userEmail={userEmail}
-          isAdmin={isAdmin}
-        />
-      </Suspense>
+      <ProjectsTable
+        search={q}
+        page={page}
+        pageSize={pageSize}
+        sort={column}
+        sortDir={ascending ? "asc" : "desc"}
+        userEmail={userEmail}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }

@@ -1,26 +1,30 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 export default function ProjectsSearch() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function onInput(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value;
-    const params = new URLSearchParams(searchParams.toString());
-    if (val) {
-      params.set("q", val);
-    } else {
-      params.delete("q");
-    }
-    params.delete("page");
-    startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`);
-    });
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (val) params.set("q", val);
+      else params.delete("q");
+      params.delete("page");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }, 350);
   }
 
   return (
@@ -28,7 +32,7 @@ export default function ProjectsSearch() {
       <input
         type="search"
         defaultValue={searchParams.get("q") ?? ""}
-        onChange={handleChange}
+        onChange={onInput}
         placeholder="Search by name, ID, email, phone…"
         className="w-72 rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
       />
@@ -45,11 +49,6 @@ export default function ProjectsSearch() {
           d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
         />
       </svg>
-      {isPending && (
-        <span className="absolute right-3 top-2.5 text-xs text-slate-400">
-          …
-        </span>
-      )}
     </div>
   );
 }

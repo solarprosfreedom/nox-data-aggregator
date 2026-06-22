@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { ProjectSortColumn } from "@/lib/data-hub/project-sort";
 
 function SortCaret({
@@ -39,15 +40,18 @@ export default function SortableHeader({
   currentSort: ProjectSortColumn;
   currentDir: "asc" | "desc";
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
   const active = currentSort === column;
   const displayDir = active ? currentDir : "desc";
 
-  const onClick = useCallback(() => {
+  useEffect(() => {
+    setPending(false);
+  }, [currentSort, currentDir, searchParams]);
+
+  const href = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     if (active) {
       params.set("sortDir", currentDir === "asc" ? "desc" : "asc");
@@ -56,28 +60,28 @@ export default function SortableHeader({
       params.set("sortDir", "asc");
     }
     params.set("page", "1");
-    startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`);
-    });
-  }, [active, column, currentDir, pathname, router, searchParams]);
+    return `${pathname}?${params.toString()}`;
+  }, [active, column, currentDir, pathname, searchParams]);
 
   return (
     <th className="whitespace-nowrap border-b border-slate-200 bg-white px-3 py-3 text-left text-xs font-normal text-slate-600">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={isPending}
+      <Link
+        href={href()}
+        replace
+        scroll={false}
+        prefetch
         title={`Sort by ${label}`}
         aria-sort={
           active ? (currentDir === "asc" ? "ascending" : "descending") : "none"
         }
-        className={`group inline-flex cursor-pointer items-center gap-1.5 transition-colors hover:text-slate-900 disabled:opacity-50 ${
-          active ? "text-slate-900" : "text-slate-600"
-        }`}
+        onClick={() => setPending(true)}
+        className={`group inline-flex cursor-pointer items-center gap-1.5 transition-colors hover:text-slate-900 ${
+          active || pending ? "text-slate-900" : "text-slate-600"
+        } ${pending ? "opacity-70" : ""}`}
       >
         <span>{label}</span>
         <SortCaret direction={displayDir} active={active} />
-      </button>
+      </Link>
     </th>
   );
 }
