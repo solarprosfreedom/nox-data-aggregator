@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/hubspot-illum-sync",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

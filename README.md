@@ -26,6 +26,7 @@ Import and consolidate **projects**, **Terros exports**, and **remittance** file
    - `supabase/migrations/002_hub_remittance.sql`
    - `supabase/migrations/003_user_app_access.sql`
    - `supabase/migrations/004_hub_import_log.sql`
+   - `supabase/migrations/008_hubspot_sync_state.sql` (for HubSpot recurring sync)
 
    Also run `enerflo-mvp/supabase/migrations/007_user_app_access.sql` if not already applied (same table).
 
@@ -55,6 +56,14 @@ X-API-Key: your-data-hub-api-key
 ```
 
 Set `DATA_HUB_API_KEY` in `.env.local`.
+
+## HubSpot Illum recurring sync
+
+- Set `HUB_SPOT_ILLUM` to your HubSpot private app token.
+- Set `CRON_SECRET` and use the same value in your cron caller.
+- Cron endpoint: `POST /api/cron/hubspot-illum-sync`
+- Optional full backfill run: `POST /api/cron/hubspot-illum-sync?full_refresh=1`
+- Scheduled every 15 minutes via `vercel.json`.
 
 ## Architecture
 
