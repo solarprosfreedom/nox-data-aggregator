@@ -42,7 +42,11 @@ function Ppw({ v }: { v: number | null | undefined }) {
 }
 
 function TH({ children }: { children?: React.ReactNode }) {
-  return <th className="whitespace-nowrap px-3 py-3 font-medium">{children}</th>;
+  return (
+    <th className="whitespace-nowrap border-b border-slate-200 bg-white px-3 py-3 text-left text-xs font-normal text-slate-600">
+      {children}
+    </th>
+  );
 }
 
 function TD({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
@@ -138,7 +142,7 @@ export async function ProjectsTable({
       ) : (
         <div className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm" style={{ maxHeight: "calc(100vh - 180px)" }}>
           <table className="min-w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 bg-white text-left text-xs text-slate-600">
               <tr>
                 {/* Identity */}
                 <TH>#</TH>
