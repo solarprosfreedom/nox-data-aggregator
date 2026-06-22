@@ -45,6 +45,41 @@ function TD({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
   );
 }
 
+function customerName(name: string | null | undefined): string | null {
+  if (!name?.trim()) return null;
+  const idx = name.indexOf(" - ");
+  return (idx >= 0 ? name.slice(0, idx) : name).trim() || null;
+}
+
+function systemSizeWatts(kw: number | null | undefined) {
+  if (kw == null) return <span className="text-slate-300">—</span>;
+  const n = Number(kw);
+  if (isNaN(n)) return <span className="text-slate-300">—</span>;
+  return <>{Math.round(n * 1000).toLocaleString("en-US")} W</>;
+}
+
+/** Latest remittance status wins over project stage when present. */
+function projectStage(
+  projectStageVal: string | null | undefined,
+  remitStatus: string | null | undefined
+) {
+  return remitStatus?.trim() || projectStageVal?.trim() || null;
+}
+
+/** Sales rep: closer or sales advisor; if only setter exists, use setter. */
+function salesRepName(p: {
+  closer_name?: string | null;
+  sales_advisor_name?: string | null;
+  setter_name?: string | null;
+}) {
+  return (
+    p.closer_name?.trim() ||
+    p.sales_advisor_name?.trim() ||
+    p.setter_name?.trim() ||
+    null
+  );
+}
+
 export async function ProjectsTable({
   search,
   page = 1,
@@ -103,13 +138,12 @@ export async function ProjectsTable({
                 <TH>System Size</TH>
                 <TH>Total Cost</TH>
                 {/* People */}
-                <TH>Owner / Setter</TH>
-                <TH>Closer</TH>
+                <TH>Setter</TH>
+                <TH>Sales Rep</TH>
                 {/* Org */}
                 <TH>Installer</TH>
                 {/* Remittance (latest) */}
                 <TH>Pmt Date</TH>
-                <TH>Remit Status</TH>
                 <TH>Finance Type</TH>
                 <TH>Financier</TH>
                 <TH>Utility</TH>
@@ -166,7 +200,7 @@ export async function ProjectsTable({
                   </TD>
                   <TD>
                     <span className="font-medium text-slate-900">
-                      <Str v={p.opportunity_name} />
+                      <Str v={customerName(p.opportunity_name)} />
                     </span>
                   </TD>
                   <TD><Str v={p.email} /></TD>
@@ -177,20 +211,27 @@ export async function ProjectsTable({
                   <TD><Str v={p.state_code} /></TD>
                   <TD><Str v={p.postal_code} /></TD>
                   {/* Deal */}
-                  <TD><Str v={p.project_stage} /></TD>
+                  <TD><Str v={projectStage(p.project_stage, p.remittance?.status)} /></TD>
                   <TD><Str v={p.contract_signed_date} /></TD>
-                  <TD>
-                    {p.system_size_kw != null ? `${p.system_size_kw} kW` : <span className="text-slate-300">—</span>}
-                  </TD>
+                  <TD>{systemSizeWatts(p.system_size_kw)}</TD>
                   <TD><Money v={p.total_system_cost} /></TD>
                   {/* People */}
-                  <TD><Str v={p.setter_name} /></TD>
-                  <TD><Str v={p.closer_name} /></TD>
+                  <TD>
+                    <div className="flex items-center gap-1.5">
+                      <Str v={p.setter_name} />
+                      {!p.terros_account_id && (
+                        <span
+                          className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                          title="No Terros match — setter/closer may be missing"
+                        />
+                      )}
+                    </div>
+                  </TD>
+                  <TD><Str v={salesRepName(p)} /></TD>
                   {/* Org */}
                   <TD><Str v={p.installer} /></TD>
                   {/* Remittance (latest) */}
                   <TD><Str v={p.remittance?.payment_date} /></TD>
-                  <TD><Str v={p.remittance?.status} /></TD>
                   <TD><Str v={p.remittance?.finance_type} /></TD>
                   <TD><Str v={p.remittance?.financier} /></TD>
                   <TD><Str v={p.remittance?.utility_provider} /></TD>

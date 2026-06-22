@@ -39,6 +39,20 @@ function formatUsPhone(value: unknown): string {
   return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6)}`;
 }
 
+function customerName(name: unknown): string | null {
+  if (name == null || name === "") return null;
+  const s = String(name).trim();
+  const idx = s.indexOf(" - ");
+  return (idx >= 0 ? s.slice(0, idx) : s).trim() || null;
+}
+
+function systemSizeWatts(kw: unknown): string | null {
+  if (kw == null) return null;
+  const n = Number(kw);
+  if (isNaN(n)) return null;
+  return `${Math.round(n * 1000).toLocaleString("en-US")} W`;
+}
+
 function MoneyField({ label, value }: { label: string; value: unknown }) {
   const n = value == null ? null : Number(value);
   const display =
@@ -68,14 +82,28 @@ export async function ProjectDetailContent({ id }: { id: string }) {
   const remittance =
     remittanceErr?.message.includes("remittance") ? [] : (remittanceRows ?? []);
 
+  const latestRemitStatus = remittance[0]?.status as string | undefined;
   const p = project as Record<string, unknown>;
+  const displayName =
+    customerName(p.opportunity_name) ?? (p.project_id as string);
+  const stage =
+    latestRemitStatus?.trim() || (p.project_stage as string | undefined)?.trim() || null;
+  const salesRep =
+    (p.closer_name as string | undefined)?.trim() ||
+    (p.sales_advisor_name as string | undefined)?.trim() ||
+    (p.setter_name as string | undefined)?.trim() ||
+    null;
 
   return (
     <>
-      <h1 className="mt-4 text-2xl font-bold text-slate-900">
-        {(p.opportunity_name as string) ?? (p.project_id as string)}
-      </h1>
+      <h1 className="mt-4 text-2xl font-bold text-slate-900">{displayName}</h1>
       <p className="font-mono text-sm text-slate-500">{String(p.project_id)}</p>
+      {!p.terros_account_id && (
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+          <span className="h-2 w-2 rounded-full bg-amber-400" />
+          No Terros match
+        </p>
+      )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <Section title="Contact">
@@ -89,22 +117,18 @@ export async function ProjectDetailContent({ id }: { id: string }) {
           />
         </Section>
         <Section title="Status">
-          <Field label="Project stage" value={p.project_stage} />
+          <Field label="Stage" value={stage} />
           <Field label="Contract signed" value={p.contract_signed_date} />
         </Section>
         <Section title="Sales">
-          <Field label="Sales advisor" value={p.sales_advisor_name} />
-          <Field label="Advisor email" value={p.sales_advisor_email} />
           <Field label="Setter" value={p.setter_name} />
           <Field label="Setter email" value={p.setter_email} />
-          <Field label="Closer" value={p.closer_name} />
-          <Field label="Closer email" value={p.closer_email} />
+          <Field label="Sales rep" value={salesRep} />
+          <Field label="Sales advisor" value={p.sales_advisor_name} />
+          <Field label="Advisor email" value={p.sales_advisor_email} />
         </Section>
         <Section title="System">
-          <Field
-            label="System size"
-            value={p.system_size_kw != null ? `${p.system_size_kw} kW` : null}
-          />
+          <Field label="System size" value={systemSizeWatts(p.system_size_kw)} />
           <MoneyField label="Total cost" value={p.total_system_cost} />
         </Section>
         <Section title="External IDs">
