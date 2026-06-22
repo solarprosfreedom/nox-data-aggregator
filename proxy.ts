@@ -5,7 +5,7 @@ import {
   getSupabaseUrl,
 } from "@/lib/supabase/auth-env";
 
-const PUBLIC_PATHS = ["/login", "/api/v1"];
+const PUBLIC_PATHS = ["/login", "/api/v1", "/api/cron", "/api/webhooks"];
 
 function isPublic(pathname: string) {
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {

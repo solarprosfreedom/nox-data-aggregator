@@ -92,6 +92,34 @@ function splitContactName(value: string | undefined): {
   };
 }
 
+/** Strip null bytes (rejected by Postgres) and lone UTF-16 surrogates (rejected by Node ≥24 JSON). */
+function sanitizeString(value: string): string {
+  return value
+    .replace(/\u0000/g, "")
+    .replace(/[\uD800-\uDFFF]/g, (ch, offset, str) => {
+      const code = ch.charCodeAt(0);
+      if (code >= 0xd800 && code <= 0xdbff) {
+        const next = str.charCodeAt(offset + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) return ch;
+      }
+      if (code >= 0xdc00 && code <= 0xdfff) {
+        const prev = offset > 0 ? str.charCodeAt(offset - 1) : NaN;
+        if (prev >= 0xd800 && prev <= 0xdbff) return ch;
+      }
+      return "\uFFFD";
+    });
+}
+
+function sanitizeRow(
+  row: Record<string, string | number | null>,
+): Record<string, string | number | null> {
+  const out: Record<string, string | number | null> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = typeof v === "string" ? sanitizeString(v) : v;
+  }
+  return out;
+}
+
 async function hubSpotRequest<T>(
   token: string,
   path: string,
@@ -110,7 +138,12 @@ async function hubSpotRequest<T>(
   if (!res.ok) {
     throw new Error(`HubSpot ${res.status}: ${text.slice(0, 500)}`);
   }
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // Sanitize lone surrogates and retry
+    return JSON.parse(sanitizeString(text)) as T;
+  }
 }
 
 async function loadStageLabels(token: string): Promise<{
@@ -279,7 +312,7 @@ async function upsertProjects(rows: Record<string, string | number | null>[]): P
   if (rows.length === 0) return;
   const db = createServerSupabase();
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
-    const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE);
+    const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE).map(sanitizeRow);
     const { error } = await db.from("projects").upsert(chunk, { onConflict: "project_id" });
     if (error) throw new Error(error.message);
   }
@@ -304,7 +337,7 @@ export async function runHubSpotIllumSync(options?: {
         skipped++;
         continue;
       }
-      mapped.push(row);
+      mapped.push(sanitizeRow(row));
     }
 
     const projectIds = mapped
