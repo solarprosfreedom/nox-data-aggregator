@@ -1,11 +1,22 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
-const SYNC_KEY = "hubspot_illum_deals";
-const PROJECT_ID_PREFIX = "hubspot_";
 const DEFAULT_PAGE_SIZE = 100;
 const UPSERT_CHUNK_SIZE = 500;
-const INSTALLER_VALUE = "Illum";
+
+type HubSpotSyncConfig = {
+  tokenEnvVar: string;
+  syncKey: string;
+  projectIdPrefix: string;
+  installerValue: string;
+};
+
+const ILLUM_SYNC_CONFIG: HubSpotSyncConfig = {
+  tokenEnvVar: "HUB_SPOT_ILLUM",
+  syncKey: "hubspot_illum_deals",
+  projectIdPrefix: "hubspot_",
+  installerValue: "Illum",
+};
 
 const DEAL_PROPERTIES = [
   "hs_object_id",
@@ -50,10 +61,10 @@ export type HubSpotIllumSyncResult = {
   lastModifiedAt: string | null;
 };
 
-function getHubSpotToken(): string {
-  const token = process.env.HUB_SPOT_ILLUM?.trim();
+function getHubSpotToken(tokenEnvVar: string): string {
+  const token = process.env[tokenEnvVar]?.trim();
   if (!token) {
-    throw new Error("Missing HUB_SPOT_ILLUM env var");
+    throw new Error(`Missing ${tokenEnvVar} env var`);
   }
   return token;
 }
@@ -232,6 +243,7 @@ async function fetchDealsIncremental(
 function mapDealToProjectRow(
   deal: HubSpotDeal,
   labels: { byPipelineStage: Map<string, string>; byStage: Map<string, string> },
+  config: HubSpotSyncConfig,
 ): Record<string, string | number | null> | null {
   const p = deal.properties;
   const objectId = p.hs_object_id?.trim();
@@ -243,7 +255,7 @@ function mapDealToProjectRow(
   const stageLabel = resolveStageLabel(pipelineId, stageId, labels);
 
   return {
-    project_id: `${PROJECT_ID_PREFIX}${objectId}`,
+    project_id: `${config.projectIdPrefix}${objectId}`,
     opportunity_name: p.dealname?.trim() || p.contact_name?.trim() || null,
     first_name: firstName,
     last_name: lastName,
@@ -255,30 +267,33 @@ function mapDealToProjectRow(
     contract_signed_date: toDateOnly(p.closedate),
     total_system_cost: parseContract(p.contract),
     sales_advisor_name: p.sales_rep?.trim() || null,
-    installer: INSTALLER_VALUE,
+    installer: config.installerValue,
   };
 }
 
-async function loadSyncWatermark(): Promise<number | null> {
+async function loadSyncWatermark(syncKey: string): Promise<number | null> {
   const db = createServerSupabase();
   const { data, error } = await db
     .from("hubspot_sync_state")
     .select("sync_key,last_modified_at")
-    .eq("sync_key", SYNC_KEY)
+    .eq("sync_key", syncKey)
     .maybeSingle();
   if (error) throw new Error(error.message);
   const row = data as SyncStateRow | null;
   return parseIsoToMs(row?.last_modified_at ?? undefined);
 }
 
-async function saveSyncState(params: {
+async function saveSyncState(
+  syncKey: string,
+  params: {
   lastModifiedAt: string | null;
   status: "success" | "failed";
   message: string | null;
-}): Promise<void> {
+},
+): Promise<void> {
   const db = createServerSupabase();
   const payload = {
-    sync_key: SYNC_KEY,
+    sync_key: syncKey,
     last_modified_at: params.lastModifiedAt,
     last_run_at: new Date().toISOString(),
     last_status: params.status,
@@ -318,12 +333,15 @@ async function upsertProjects(rows: Record<string, string | number | null>[]): P
   }
 }
 
-export async function runHubSpotIllumSync(options?: {
+async function runHubSpotSync(
+  config: HubSpotSyncConfig,
+  options?: {
   fullRefresh?: boolean;
-}): Promise<HubSpotIllumSyncResult> {
-  const token = getHubSpotToken();
+},
+): Promise<HubSpotIllumSyncResult> {
+  const token = getHubSpotToken(config.tokenEnvVar);
   const fullRefresh = options?.fullRefresh ?? false;
-  const sinceMs = fullRefresh ? null : await loadSyncWatermark();
+  const sinceMs = fullRefresh ? null : await loadSyncWatermark(config.syncKey);
 
   try {
     const labels = await loadStageLabels(token);
@@ -332,7 +350,7 @@ export async function runHubSpotIllumSync(options?: {
     const mapped: Record<string, string | number | null>[] = [];
     let skipped = 0;
     for (const deal of deals) {
-      const row = mapDealToProjectRow(deal, labels);
+      const row = mapDealToProjectRow(deal, labels, config);
       if (!row) {
         skipped++;
         continue;
@@ -355,7 +373,7 @@ export async function runHubSpotIllumSync(options?: {
 
     const lastModifiedAt =
       maxLastModifiedMs != null ? new Date(maxLastModifiedMs).toISOString() : null;
-    await saveSyncState({ lastModifiedAt, status: "success", message: null });
+    await saveSyncState(config.syncKey, { lastModifiedAt, status: "success", message: null });
 
     return {
       fetched: deals.length,
@@ -365,11 +383,17 @@ export async function runHubSpotIllumSync(options?: {
       lastModifiedAt,
     };
   } catch (err) {
-    await saveSyncState({
+    await saveSyncState(config.syncKey, {
       lastModifiedAt: sinceMs != null ? new Date(sinceMs).toISOString() : null,
       status: "failed",
       message: err instanceof Error ? err.message : String(err),
     });
     throw err;
   }
+}
+
+export async function runHubSpotIllumSync(options?: {
+  fullRefresh?: boolean;
+}): Promise<HubSpotIllumSyncResult> {
+  return runHubSpotSync(ILLUM_SYNC_CONFIG, options);
 }

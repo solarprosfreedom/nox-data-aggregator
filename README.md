@@ -65,6 +65,15 @@ Set `DATA_HUB_API_KEY` in `.env.local`.
 - Optional full backfill run: `POST /api/cron/hubspot-illum-sync?full_refresh=1`
 - Scheduled every 15 minutes via `vercel.json`.
 
+## Tape OWE recurring sync
+
+- OWE data source is Tape (`TAPE_API_KEY` must be set).
+- Set `TAPE_OWE_VIEW_ID` to the OWE Tape view id (or it falls back to `TAPE_CUSTOMERS_VIEW_ID`).
+- Reuse `CRON_SECRET` for auth.
+- Cron endpoint: `POST /api/cron/tape-owe-sync`
+- This sync always upserts the full configured Tape view.
+- Scheduled every 15 minutes (offset from Illum) via `vercel.json`.
+
 ## Architecture
 
 - **`hub_projects`** — unified project/deal records

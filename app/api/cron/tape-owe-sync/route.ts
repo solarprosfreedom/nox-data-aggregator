@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runHubSpotIllumSync } from "@/lib/hubspot/illum-sync";
+import { runTapeOweSync } from "@/lib/tape/owe-sync";
 
 function isAuthorized(request: NextRequest): boolean {
   const expected = process.env.CRON_SECRET?.trim();
@@ -16,8 +16,8 @@ function isAuthorized(request: NextRequest): boolean {
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    path: "/api/cron/hubspot-illum-sync",
-    schedule: "*/15 * * * *",
+    path: "/api/cron/tape-owe-sync",
+    schedule: "7,22,37,52 * * * *",
     note: "POST to execute sync",
   });
 }
@@ -27,18 +27,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const fullRefresh = request.nextUrl.searchParams.get("full_refresh") === "1";
-
   try {
-    const result = await runHubSpotIllumSync({ fullRefresh });
+    const result = await runTapeOweSync();
     return NextResponse.json({
       ok: true,
-      full_refresh: fullRefresh,
       ...result,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "HubSpot sync failed";
-    const stack = err instanceof Error ? err.stack?.split("\n").slice(0, 5).join(" | ") : undefined;
-    return NextResponse.json({ error: message, stack }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Tape OWE sync failed" },
+      { status: 500 },
+    );
   }
 }

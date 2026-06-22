@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/hubspot-illum-sync",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/tape-owe-sync",
+      "schedule": "7,22,37,52 * * * *"
     }
   ]
 }
