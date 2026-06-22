@@ -1,4 +1,7 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import {
+  parseProjectSort,
+} from "@/lib/data-hub/project-sort";
 
 export type Project = {
   id: string;
@@ -146,17 +149,20 @@ export async function listProjectsPaged(opts: {
   page: number;
   pageSize: number;
   search?: string;
+  sort?: string;
+  sortDir?: string;
   userEmail?: string; // when set, filters to projects where setter_email or closer_email matches
 }): Promise<{ rows: ProjectWithRemittance[]; total: number }> {
   const db = createServerSupabase();
   const page = Math.max(1, opts.page);
   const from = (page - 1) * opts.pageSize;
   const to = from + opts.pageSize - 1;
+  const { column, ascending } = parseProjectSort(opts.sort, opts.sortDir);
 
   let query = db
     .from("projects")
     .select("*", { count: "exact" })
-    .order("updated_at", { ascending: false })
+    .order(column, { ascending })
     .range(from, to);
 
   // Non-admin users only see their own projects (setter or closer).

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import CsvDropZone from "@/components/ui/CsvDropZone";
+import InstallerSelect from "@/components/ui/InstallerSelect";
 import {
   getFields,
   SKIP,
@@ -9,7 +10,13 @@ import {
   type SchemaType,
 } from "@/lib/data-hub/field-mapper";
 import { parseCsv, rowsToRecords, findHeaderRowIndex } from "@/lib/csv/parse";
-import { importWithMapping } from "./actions";
+import type { MappingTemplate } from "@/lib/data-hub/mapping-templates";
+import {
+  deleteMappingTemplate,
+  fetchMappingTemplates,
+  importWithMapping,
+  saveMappingTemplate,
+} from "./actions";
 
 type Step = "upload" | "map" | "done";
 
@@ -25,10 +32,39 @@ const SCHEMAS: { value: SchemaType; label: string; hint: string }[] = [
   { value: "remittance", label: "Remittance", hint: "Requires HES Code + Payment Date" },
 ];
 
-export default function MappingForm() {
+function applyTemplateToHeaders(
+  csvHeaders: string[],
+  originalHeaders: string[],
+  templateMap: Record<string, string>,
+  schema: SchemaType
+): Record<string, string> {
+  const base = autoSuggestMapping(csvHeaders, schema);
+  const usedFields = new Set<string>();
+
+  for (let idx = 0; idx < csvHeaders.length; idx++) {
+    const deduped = csvHeaders[idx]!;
+    const original = originalHeaders[idx] ?? deduped;
+    const fieldKey = templateMap[original] ?? templateMap[deduped];
+    if (fieldKey && fieldKey !== SKIP && !usedFields.has(fieldKey)) {
+      base[deduped] = fieldKey;
+      usedFields.add(fieldKey);
+    }
+  }
+
+  return base;
+}
+
+export default function MappingForm({
+  installers,
+  initialTemplates,
+}: {
+  installers: string[];
+  initialTemplates: MappingTemplate[];
+}) {
   const [step, setStep] = useState<Step>("upload");
   const [fileKey, setFileKey] = useState(0);
   const [schema, setSchema] = useState<SchemaType>("projects");
+  const [installer, setInstaller] = useState("");
   const [fileName, setFileName] = useState("");
   const [csvContent, setCsvContent] = useState("");
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -38,6 +74,27 @@ export default function MappingForm() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [templates, setTemplates] = useState<MappingTemplate[]>(initialTemplates);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const schemaTemplates = useMemo(
+    () => templates.filter((t) => t.schema_type === schema),
+    [templates, schema]
+  );
+
+  useEffect(() => {
+    startTransition(async () => {
+      const res = await fetchMappingTemplates(schema, installer || undefined);
+      if (Array.isArray(res)) setTemplates((prev) => {
+        const other = prev.filter((t) => t.schema_type !== schema);
+        return [...res, ...other].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+    });
+  }, [schema, installer]);
 
   const handleFileSelect = useCallback(
     async (file: File) => {
@@ -45,11 +102,9 @@ export default function MappingForm() {
       const rows = parseCsv(text);
       const records = rowsToRecords(rows);
 
-      // Use the same header row that rowsToRecords found
       const headerIdx = findHeaderRowIndex(rows);
       const rawHeaders = rows[headerIdx]?.map((h) => h.trim().replace(/\s+/g, " ")) ?? [];
 
-      // De-duplicate header names (some CSVs repeat column names)
       const deduped = rawHeaders.map((h, i) => {
         const count = rawHeaders.slice(0, i).filter((x) => x === h).length;
         return count > 0 ? `${h} (${count + 1})` : h;
@@ -60,16 +115,46 @@ export default function MappingForm() {
       setOriginalHeaders(rawHeaders);
       setCsvHeaders(deduped);
       setPreviewRows(records.slice(0, 3));
-      setMapping(autoSuggestMapping(deduped, schema));
+
+      const template = schemaTemplates.find((t) => t.id === selectedTemplateId);
+      if (template) {
+        setMapping(applyTemplateToHeaders(deduped, rawHeaders, template.column_map, schema));
+      } else {
+        setMapping(autoSuggestMapping(deduped, schema));
+      }
+
       setStep("map");
       setResult(null);
       setError(null);
+      setSaveMessage(null);
     },
-    [schema]
+    [schema, schemaTemplates, selectedTemplateId]
   );
+
+  function loadTemplate(templateId: string) {
+    setSelectedTemplateId(templateId);
+    if (!templateId || csvHeaders.length === 0) return;
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return;
+    setMapping(
+      applyTemplateToHeaders(csvHeaders, originalHeaders, template.column_map, schema)
+    );
+    if (template.installer_name) setInstaller(template.installer_name);
+    setTemplateName(template.name);
+  }
 
   function handleMappingChange(csvCol: string, fieldKey: string) {
     setMapping((prev) => ({ ...prev, [csvCol]: fieldKey }));
+  }
+
+  function resolvedColumnMap(): Record<string, string> {
+    const resolvedMapping: Record<string, string> = {};
+    csvHeaders.forEach((deduped, idx) => {
+      const original = originalHeaders[idx] ?? deduped;
+      const fieldKey = mapping[deduped] ?? SKIP;
+      if (fieldKey !== SKIP) resolvedMapping[original] = fieldKey;
+    });
+    return resolvedMapping;
   }
 
   function handleImport() {
@@ -78,14 +163,8 @@ export default function MappingForm() {
     fd.set("content", csvContent);
     fd.set("fileName", fileName);
     fd.set("schema", schema);
-    // Map deduped headers back to original so CSV lookup works
-    const resolvedMapping: Record<string, string> = {};
-    csvHeaders.forEach((deduped, idx) => {
-      const original = originalHeaders[idx] ?? deduped;
-      const fieldKey = mapping[deduped] ?? SKIP;
-      if (fieldKey !== SKIP) resolvedMapping[original] = fieldKey;
-    });
-    fd.set("mapping", JSON.stringify(resolvedMapping));
+    fd.set("installer", installer);
+    fd.set("mapping", JSON.stringify(resolvedColumnMap()));
 
     startTransition(async () => {
       const res = await importWithMapping(fd);
@@ -95,6 +174,50 @@ export default function MappingForm() {
       }
       setResult(res);
       setStep("done");
+    });
+  }
+
+  function handleSaveTemplate() {
+    setSaveMessage(null);
+    const fd = new FormData();
+    fd.set("name", templateName.trim() || `${installer || "Generic"} ${schema} mapping`);
+    fd.set("schema_type", schema);
+    fd.set("installer_name", installer);
+    fd.set("column_map", JSON.stringify(resolvedColumnMap()));
+    if (selectedTemplateId) fd.set("id", selectedTemplateId);
+
+    startTransition(async () => {
+      const res = await saveMappingTemplate(fd);
+      if ("error" in res) {
+        setSaveMessage(res.error);
+        return;
+      }
+      setSelectedTemplateId(res.id);
+      setSaveMessage("Template saved.");
+      const refreshed = await fetchMappingTemplates(schema, installer || undefined);
+      if (Array.isArray(refreshed)) {
+        setTemplates((prev) => {
+          const other = prev.filter((t) => t.schema_type !== schema);
+          return [...refreshed, ...other].sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        });
+      }
+    });
+  }
+
+  function handleDeleteTemplate() {
+    if (!selectedTemplateId) return;
+    startTransition(async () => {
+      const res = await deleteMappingTemplate(selectedTemplateId);
+      if ("error" in res) {
+        setSaveMessage(res.error);
+        return;
+      }
+      setSelectedTemplateId("");
+      setTemplateName("");
+      setSaveMessage("Template deleted.");
+      setTemplates((prev) => prev.filter((t) => t.id !== selectedTemplateId));
     });
   }
 
@@ -108,6 +231,7 @@ export default function MappingForm() {
     setMapping({});
     setResult(null);
     setError(null);
+    setSaveMessage(null);
   }
 
   const fields = getFields(schema);
@@ -117,7 +241,6 @@ export default function MappingForm() {
   const requiredFields = fields.filter((f) => f.required).map((f) => f.key);
   const missingRequired = requiredFields.filter((k) => !mappedFields.has(k));
 
-  // ── Step: Upload ──────────────────────────────────────────────────────────
   if (step === "upload") {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -127,7 +250,6 @@ export default function MappingForm() {
           assign each one to the correct field.
         </p>
 
-        {/* Schema selector */}
         <div className="mt-5">
           <p className="mb-2 text-sm font-medium text-slate-700">
             What are you importing?
@@ -137,7 +259,10 @@ export default function MappingForm() {
               <button
                 key={s.value}
                 type="button"
-                onClick={() => setSchema(s.value)}
+                onClick={() => {
+                  setSchema(s.value);
+                  setSelectedTemplateId("");
+                }}
                 className={`flex-1 rounded-xl border-2 p-3 text-left transition ${
                   schema === s.value
                     ? "border-cyan-500 bg-cyan-50"
@@ -151,6 +276,41 @@ export default function MappingForm() {
           </div>
         </div>
 
+        {schema === "projects" && (
+          <div className="mt-5">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Installer
+            </label>
+            <InstallerSelect
+              options={installers}
+              value={installer}
+              onChange={setInstaller}
+              placeholder="Apply to all rows (optional)…"
+            />
+          </div>
+        )}
+
+        {schemaTemplates.length > 0 && (
+          <div className="mt-5">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Load saved mapping (optional)
+            </label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => loadTemplate(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="">Auto-detect columns</option>
+              {schemaTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.installer_name ? ` (${t.installer_name})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="mt-5">
           <CsvDropZone
             name="file"
@@ -162,7 +322,6 @@ export default function MappingForm() {
     );
   }
 
-  // ── Step: Done ────────────────────────────────────────────────────────────
   if (step === "done" && result) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -193,11 +352,9 @@ export default function MappingForm() {
     );
   }
 
-  // ── Step: Map ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      {/* File + schema info bar */}
-      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
         <div>
           <span className="text-sm font-medium text-slate-800">{fileName}</span>
           <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
@@ -212,7 +369,20 @@ export default function MappingForm() {
         </button>
       </div>
 
-      {/* Mapping table */}
+      {schema === "projects" && (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Installer for this batch
+          </label>
+          <InstallerSelect
+            options={installers}
+            value={installer}
+            onChange={setInstaller}
+            placeholder="Apply to all rows (optional)…"
+          />
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-3">
           <h2 className="text-sm font-semibold text-slate-900">Column mapping</h2>
@@ -275,8 +445,7 @@ export default function MappingForm() {
           </table>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">
           <div className="text-xs text-slate-500">
             {Object.values(mapping).filter((v) => v !== SKIP).length} of{" "}
             {csvHeaders.length} columns mapped
@@ -289,7 +458,7 @@ export default function MappingForm() {
               </span>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={reset}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -305,6 +474,60 @@ export default function MappingForm() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-900">Save mapping template</h3>
+        <p className="mt-1 text-xs text-slate-500">
+          Reuse this column mapping on future imports for the same installer.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="min-w-[200px] flex-1">
+            <label className="mb-1 block text-xs text-slate-500">Template name</label>
+            <input
+              type="text"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              placeholder="Axia projects v1"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <select
+            value={selectedTemplateId}
+            onChange={(e) => loadTemplate(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="">New template</option>
+            {schemaTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleSaveTemplate}
+            disabled={pending}
+            className="rounded-lg border border-cyan-600 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-50 disabled:opacity-60"
+          >
+            Save template
+          </button>
+          {selectedTemplateId && (
+            <button
+              type="button"
+              onClick={handleDeleteTemplate}
+              disabled={pending}
+              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+        {saveMessage && (
+          <p className={`mt-2 text-xs ${saveMessage.includes("failed") || saveMessage.includes("error") || saveMessage.includes("required") ? "text-red-600" : "text-emerald-600"}`}>
+            {saveMessage}
+          </p>
+        )}
       </div>
 
       {error && (

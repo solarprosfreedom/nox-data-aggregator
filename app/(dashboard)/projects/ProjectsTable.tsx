@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { listProjectsPaged } from "@/lib/data-hub/queries";
 import Pagination from "@/components/ui/Pagination";
+import SortableHeader from "@/components/ui/SortableHeader";
+import type { ProjectSortColumn } from "@/lib/data-hub/project-sort";
+import { computeGrossPpw, computeNetPpw } from "@/lib/data-hub/ppw";
 import EditProjectDrawer from "./EditProjectDrawer";
 import DeleteProjectButton from "./DeleteProjectButton";
 
@@ -31,6 +34,11 @@ function Num({ v }: { v: unknown }) {
   const n = Number(v);
   if (isNaN(n)) return <>{String(v)}</>;
   return <>{n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>;
+}
+
+function Ppw({ v }: { v: number | null | undefined }) {
+  if (v == null || isNaN(Number(v))) return <span className="text-slate-300">—</span>;
+  return <>${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>;
 }
 
 function TH({ children }: { children?: React.ReactNode }) {
@@ -84,16 +92,27 @@ export async function ProjectsTable({
   search,
   page = 1,
   pageSize = 25,
+  sort = "updated_at",
+  sortDir = "desc",
   userEmail,
   isAdmin = true,
 }: {
   search?: string;
   page?: number;
   pageSize?: number;
+  sort?: ProjectSortColumn;
+  sortDir?: "asc" | "desc";
   userEmail?: string;
   isAdmin?: boolean;
 }) {
-  const { rows: projects, total } = await listProjectsPaged({ page, pageSize, search, userEmail });
+  const { rows: projects, total } = await listProjectsPaged({
+    page,
+    pageSize,
+    search,
+    sort,
+    sortDir,
+    userEmail,
+  });
 
   return (
     <>
@@ -123,25 +142,27 @@ export async function ProjectsTable({
               <tr>
                 {/* Identity */}
                 <TH>#</TH>
-                <TH>Project ID</TH>
-                <TH>Customer</TH>
-                <TH>Email</TH>
-                <TH>Phone</TH>
+                <SortableHeader label="Project ID" column="project_id" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="Customer" column="opportunity_name" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="Email" column="email" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="Phone" column="phone" currentSort={sort} currentDir={sortDir} />
                 {/* Address */}
-                <TH>Address</TH>
-                <TH>City</TH>
-                <TH>State</TH>
-                <TH>Zip</TH>
+                <SortableHeader label="Address" column="address_line1" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="City" column="city" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="State" column="state_code" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="Zip" column="postal_code" currentSort={sort} currentDir={sortDir} />
                 {/* Deal */}
-                <TH>Stage</TH>
-                <TH>Contract Date</TH>
-                <TH>System Size</TH>
-                <TH>Total Cost</TH>
+                <SortableHeader label="Stage" column="project_stage" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="Contract Date" column="contract_signed_date" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="System Size" column="system_size_kw" currentSort={sort} currentDir={sortDir} />
+                <SortableHeader label="Total Cost" column="total_system_cost" currentSort={sort} currentDir={sortDir} />
+                <TH>Calc Gross PPW</TH>
+                <TH>Calc Net PPW</TH>
                 {/* People */}
-                <TH>Setter</TH>
+                <SortableHeader label="Setter" column="setter_name" currentSort={sort} currentDir={sortDir} />
                 <TH>Sales Rep</TH>
                 {/* Org */}
-                <TH>Installer</TH>
+                <SortableHeader label="Installer" column="installer" currentSort={sort} currentDir={sortDir} />
                 {/* Remittance (latest) */}
                 <TH>Pmt Date</TH>
                 <TH>Finance Type</TH>
@@ -215,6 +236,21 @@ export async function ProjectsTable({
                   <TD><Str v={p.contract_signed_date} /></TD>
                   <TD>{systemSizeWatts(p.system_size_kw)}</TD>
                   <TD><Money v={p.total_system_cost} /></TD>
+                  <TD>
+                    <Ppw
+                      v={computeGrossPpw(p.total_system_cost, p.system_size_kw)}
+                    />
+                  </TD>
+                  <TD>
+                    <Ppw
+                      v={computeNetPpw(
+                        p.total_system_cost,
+                        p.system_size_kw,
+                        p.remittance?.battery_price,
+                        p.remittance?.adder_amount
+                      )}
+                    />
+                  </TD>
                   {/* People */}
                   <TD>
                     <div className="flex items-center gap-1.5">

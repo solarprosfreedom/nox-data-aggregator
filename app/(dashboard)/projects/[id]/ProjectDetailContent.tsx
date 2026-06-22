@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getProject } from "@/lib/data-hub/queries";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { computeGrossPpw, computeNetPpw, formatPpw } from "@/lib/data-hub/ppw";
 
 function Section({
   title,
@@ -74,7 +75,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
   const db = createServerSupabase();
   const { data: remittanceRows, error: remittanceErr } = await db
     .from("remittance")
-    .select("payment_date, payment_this_week, total_sp_paid, status")
+    .select("payment_date, payment_this_week, total_sp_paid, status, battery_price, adder_amount")
     .eq("project_id", id)
     .order("payment_date", { ascending: false })
     .limit(10);
@@ -82,8 +83,21 @@ export async function ProjectDetailContent({ id }: { id: string }) {
   const remittance =
     remittanceErr?.message.includes("remittance") ? [] : (remittanceRows ?? []);
 
-  const latestRemitStatus = remittance[0]?.status as string | undefined;
   const p = project as Record<string, unknown>;
+  const latestRemitStatus = remittance[0]?.status as string | undefined;
+  const latestRemit = remittance[0] as
+    | { battery_price?: number | null; adder_amount?: number | null }
+    | undefined;
+  const grossPpw = computeGrossPpw(
+    p.total_system_cost as number | null,
+    p.system_size_kw as number | null
+  );
+  const netPpw = computeNetPpw(
+    p.total_system_cost as number | null,
+    p.system_size_kw as number | null,
+    latestRemit?.battery_price,
+    latestRemit?.adder_amount
+  );
   const displayName =
     customerName(p.opportunity_name) ?? (p.project_id as string);
   const stage =
@@ -130,6 +144,8 @@ export async function ProjectDetailContent({ id }: { id: string }) {
         <Section title="System">
           <Field label="System size" value={systemSizeWatts(p.system_size_kw)} />
           <MoneyField label="Total cost" value={p.total_system_cost} />
+          <Field label="Gross PPW (calc)" value={formatPpw(grossPpw)} />
+          <Field label="Net PPW (calc)" value={formatPpw(netPpw)} />
         </Section>
         <Section title="External IDs">
           <Field label="Terros account" value={p.terros_account_id} />

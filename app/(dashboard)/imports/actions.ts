@@ -35,6 +35,7 @@ export async function uploadImportFile(formData: FormData): Promise<UploadResult
   if (!content.trim()) return { error: "File is empty." };
 
   const sourceOverride = formData.get("source");
+  const installer = String(formData.get("installer") ?? "").trim() || null;
   const validSources = ["projects_sheet", "remittance"] as const;
   const source =
     typeof sourceOverride === "string" &&
@@ -54,6 +55,7 @@ export async function uploadImportFile(formData: FormData): Promise<UploadResult
       fileHash,
       content,
       uploadedBy: user.id,
+      installer: source === "projects_sheet" ? installer : null,
     });
 
     revalidatePath("/projects");

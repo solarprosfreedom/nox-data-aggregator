@@ -20,8 +20,10 @@ export async function processImport(options: {
   fileHash: string;
   content: string;
   uploadedBy?: string;
+  installer?: string | null;
 }): Promise<ImportResult> {
-  const { db, source, fileName, fileHash, content, uploadedBy } = options;
+  const { db, source, fileName, fileHash, content, uploadedBy, installer } = options;
+  const batchInstaller = installer?.trim() || null;
 
   if (source !== "projects_sheet" && source !== "remittance") {
     throw new Error("Only projects sheet and remittance imports are enabled.");
@@ -74,6 +76,8 @@ export async function processImport(options: {
           errorMessages.push(`Row ${i + 2}: missing HES ID / project_id`);
           continue;
         }
+
+        if (batchInstaller) mapped.installer = batchInstaller;
 
         const { data: existing } = await db
           .from("projects")

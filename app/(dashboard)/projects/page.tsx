@@ -7,15 +7,23 @@ import ExportCsvButton from "@/components/ui/ExportCsvButton";
 import SyncSettersButton from "./SyncSettersButton";
 import SequifiSyncInlineButton from "./SequifiSyncInlineButton";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { parseProjectSort } from "@/lib/data-hub/project-sort";
 
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    page?: string;
+    pageSize?: string;
+    sort?: string;
+    sortDir?: string;
+  }>;
 }) {
-  const { q, page: pageParam, pageSize: pageSizeParam } = await searchParams;
+  const { q, page: pageParam, pageSize: pageSizeParam, sort, sortDir } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
   const pageSize = [25, 50, 100].includes(Number(pageSizeParam)) ? Number(pageSizeParam) : 25;
+  const { column, ascending } = parseProjectSort(sort, sortDir);
 
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -46,8 +54,19 @@ export default async function ProjectsPage({
         </div>
       </div>
 
-      <Suspense key={`${q ?? ""}-${page}-${pageSize}`} fallback={<PageSkeleton />}>
-        <ProjectsTable search={q} page={page} pageSize={pageSize} userEmail={userEmail} isAdmin={isAdmin} />
+      <Suspense
+        key={`${q ?? ""}-${page}-${pageSize}-${column}-${ascending ? "asc" : "desc"}`}
+        fallback={<PageSkeleton />}
+      >
+        <ProjectsTable
+          search={q}
+          page={page}
+          pageSize={pageSize}
+          sort={column}
+          sortDir={ascending ? "asc" : "desc"}
+          userEmail={userEmail}
+          isAdmin={isAdmin}
+        />
       </Suspense>
     </div>
   );

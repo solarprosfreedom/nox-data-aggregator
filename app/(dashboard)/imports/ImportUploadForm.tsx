@@ -2,6 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import CsvDropZone from "@/components/ui/CsvDropZone";
+import InstallerSelect from "@/components/ui/InstallerSelect";
 import {
   detectImportSourceFromCsv,
   IMPORT_SOURCE_LABELS,
@@ -11,12 +12,13 @@ import { uploadImportFile } from "./actions";
 
 const ENABLED_SOURCES: ImportSource[] = ["projects_sheet", "remittance"];
 
-export default function ImportUploadForm() {
+export default function ImportUploadForm({ installers }: { installers: string[] }) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileKey, setFileKey] = useState(0);
   const [source, setSource] = useState<ImportSource>("projects_sheet");
+  const [installer, setInstaller] = useState("");
   const [autoDetected, setAutoDetected] = useState(false);
   const [detecting, setDetecting] = useState(false);
 
@@ -36,6 +38,7 @@ export default function ImportUploadForm() {
 
   const resetFormState = () => {
     setSource("projects_sheet");
+    setInstaller("");
     setAutoDetected(false);
     setFileKey((k) => k + 1);
   };
@@ -50,6 +53,7 @@ export default function ImportUploadForm() {
         const form = e.currentTarget;
         const fd = new FormData(form);
         fd.set("source", source);
+        if (installer) fd.set("installer", installer);
         startTransition(async () => {
           const res = await uploadImportFile(fd);
           if ("error" in res) {
@@ -124,6 +128,23 @@ export default function ImportUploadForm() {
             </p>
           )}
         </div>
+
+        {source === "projects_sheet" && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Installer
+            </label>
+            <InstallerSelect
+              options={installers}
+              value={installer}
+              onChange={setInstaller}
+              placeholder="Apply to all rows (optional)…"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Sets installer on every project row in this file.
+            </p>
+          </div>
+        )}
 
         <button
           type="submit"
