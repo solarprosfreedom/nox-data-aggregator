@@ -34,40 +34,51 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl;
   const q = searchParams.get("q") ?? undefined;
+  const installer = searchParams.get("installer")?.trim() ?? "";
+  const PROJECT_EXPORT_COLUMNS =
+    "id, project_id, opportunity_name, first_name, last_name, email, phone, address_line1, city, state_code, postal_code, project_stage, contract_signed_date, total_system_cost, system_size_kw, sales_advisor_name, sales_advisor_email, setter_name, setter_email, closer_name, closer_email, market, team, region, division, dealer_name, office_name, installer, terros_account_id, sequifi_sale_id, updated_at";
+  const pageSize = 1000;
+  const projects: Record<string, unknown>[] = [];
+  let from = 0;
+  while (true) {
+    let query = db
+      .from("projects")
+      .select(PROJECT_EXPORT_COLUMNS)
+      .order("updated_at", { ascending: false })
+      .range(from, from + pageSize - 1);
 
-  let query = db
-    .from("projects")
-    .select(
-      "id, project_id, opportunity_name, first_name, last_name, email, phone, address_line1, city, state_code, postal_code, project_stage, contract_signed_date, total_system_cost, system_size_kw, sales_advisor_name, sales_advisor_email, setter_name, setter_email, closer_name, closer_email, market, team, region, division, dealer_name, office_name, terros_account_id, sequifi_sale_id, updated_at"
-    )
-    .order("updated_at", { ascending: false })
-    .limit(10000);
+    if (q) {
+      query = query.or(
+        `project_id.ilike.%${q}%,opportunity_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`
+      );
+    }
+    if (installer) query = query.eq("installer", installer);
 
-  if (q) {
-    query = query.or(
-      `project_id.ilike.%${q}%,opportunity_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`
-    );
+    const { data, error } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const batch = (data ?? []) as Record<string, unknown>[];
+    projects.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
   }
-
-  const { data, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  const projects = (data ?? []) as Record<string, unknown>[];
 
   // Attach each project's latest remittance row (by payment_date).
   const ids = projects.map((p) => p.id as string);
   const latestRemit = new Map<string, Record<string, unknown>>();
   if (ids.length) {
-    const { data: remitData } = await db
-      .from("remittance")
-      .select(`project_id, ${REMITTANCE_EXPORT_COLUMNS.join(", ")}`)
-      .in("project_id", ids)
-      .order("payment_date", { ascending: false });
-    for (const row of (remitData ?? []) as unknown as Record<string, unknown>[]) {
-      const pid = row.project_id as string | null;
-      if (pid && !latestRemit.has(pid)) latestRemit.set(pid, row);
+    const chunkSize = 500;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const { data: remitData } = await db
+        .from("remittance")
+        .select(`project_id, ${REMITTANCE_EXPORT_COLUMNS.join(", ")}`)
+        .in("project_id", chunk)
+        .order("payment_date", { ascending: false });
+      for (const row of (remitData ?? []) as unknown as Record<string, unknown>[]) {
+        const pid = row.project_id as string | null;
+        if (pid && !latestRemit.has(pid)) latestRemit.set(pid, row);
+      }
     }
   }
 

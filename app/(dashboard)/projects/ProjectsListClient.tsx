@@ -22,6 +22,7 @@ export default function ProjectsListClient({
   serverSort,
   serverSortDir,
   serverSearch,
+  serverInstaller,
   total,
   tableMode,
   children,
@@ -31,6 +32,7 @@ export default function ProjectsListClient({
   serverSort: string;
   serverSortDir: string;
   serverSearch?: string;
+  serverInstaller?: string;
   total: number;
   tableMode: boolean;
   children: React.ReactNode;
@@ -42,6 +44,7 @@ export default function ProjectsListClient({
       serverSort={serverSort}
       serverSortDir={serverSortDir}
       serverSearch={serverSearch}
+      serverInstaller={serverInstaller}
     >
       <ProjectsListBody total={total} serverSearch={serverSearch} tableMode={tableMode}>
         {children}

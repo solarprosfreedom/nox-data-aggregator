@@ -20,6 +20,7 @@ function readUrlState(searchParams: URLSearchParams) {
     sort: searchParams.get("sort") ?? "updated_at",
     sortDir: searchParams.get("sortDir") ?? "desc",
     q: searchParams.get("q") ?? "",
+    installer: searchParams.get("installer") ?? "",
   };
 }
 
@@ -29,8 +30,11 @@ export function projectsTableQueryKey(opts: {
   sort: string;
   sortDir: string;
   q?: string;
+  installer?: string;
 }) {
-  return [opts.page, opts.pageSize, opts.sort, opts.sortDir, opts.q ?? ""].join("|");
+  return [opts.page, opts.pageSize, opts.sort, opts.sortDir, opts.q ?? "", opts.installer ?? ""].join(
+    "|"
+  );
 }
 
 export function readProjectsUrlState(searchParams: URLSearchParams) {
@@ -53,6 +57,7 @@ export function ProjectsPagerProvider({
   serverSort,
   serverSortDir,
   serverSearch,
+  serverInstaller,
   children,
 }: {
   serverPage: number;
@@ -60,6 +65,7 @@ export function ProjectsPagerProvider({
   serverSort: string;
   serverSortDir: string;
   serverSearch?: string;
+  serverInstaller?: string;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -105,6 +111,7 @@ export function ProjectsPagerProvider({
       sort: serverSort,
       sortDir: serverSortDir,
       q: serverSearch,
+      installer: serverInstaller,
     }) ===
     projectsTableQueryKey({
       page: displayPage,
@@ -112,6 +119,7 @@ export function ProjectsPagerProvider({
       sort: url.sort,
       sortDir: url.sortDir,
       q: url.q,
+      installer: url.installer,
     });
 
   const isNavigating = pendingPage !== null || pendingPageSize !== null || !serverSynced;

@@ -94,6 +94,7 @@ function salesRepName(p: {
 
 export async function ProjectsTable({
   search,
+  installer,
   page = 1,
   pageSize = 25,
   sort = "updated_at",
@@ -102,6 +103,7 @@ export async function ProjectsTable({
   isAdmin = true,
 }: {
   search?: string;
+  installer?: string;
   page?: number;
   pageSize?: number;
   sort?: ProjectSortColumn;
@@ -113,6 +115,7 @@ export async function ProjectsTable({
     page,
     pageSize,
     search,
+    installer,
     sort,
     sortDir,
     userEmail,
@@ -125,6 +128,7 @@ export async function ProjectsTable({
       serverSort={sort}
       serverSortDir={sortDir}
       serverSearch={search}
+      serverInstaller={installer}
       total={total}
       tableMode={projects.length > 0}
     >

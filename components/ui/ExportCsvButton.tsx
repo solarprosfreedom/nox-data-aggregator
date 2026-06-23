@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 export default function ExportCsvButton({
   href,
   label = "Export CSV",
@@ -7,31 +9,68 @@ export default function ExportCsvButton({
   href: string;
   label?: string;
 }) {
+  const [isExporting, setIsExporting] = useState(false);
+
+  async function onClick(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const res = await fetch(href);
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const cd = res.headers.get("content-disposition") ?? "";
+      const match = cd.match(/filename="?([^"]+)"?/i);
+      const filename = match?.[1] ?? "projects.csv";
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("CSV export failed. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
-    <a
-      href={href}
-      download
-      className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isExporting}
+      className={`flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 ${
+        isExporting ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50"
+      }`}
     >
-      <svg
-        className="h-4 w-4 text-slate-500"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"
-        />
-      </svg>
-      {label}
-    </a>
+      {isExporting ? (
+        <>
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+          Exporting...
+        </>
+      ) : (
+        <>
+          <svg
+            className="h-4 w-4 text-slate-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"
+            />
+          </svg>
+          {label}
+        </>
+      )}
+    </button>
   );
 }
-
-
-
-
-

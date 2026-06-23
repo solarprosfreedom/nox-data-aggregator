@@ -165,6 +165,7 @@ export async function listProjectsPaged(opts: {
   page: number;
   pageSize: number;
   search?: string;
+  installer?: string;
   sort?: string;
   sortDir?: string;
   userEmail?: string; // when set, filters to projects where setter_email or closer_email matches
@@ -192,6 +193,10 @@ export async function listProjectsPaged(opts: {
     query = query.or(
       `project_id.ilike.%${opts.search}%,opportunity_name.ilike.%${opts.search}%,email.ilike.%${opts.search}%,phone.ilike.%${opts.search}%`
     );
+  }
+
+  if (opts.installer?.trim()) {
+    query = query.eq("installer", opts.installer.trim());
   }
 
   const { data, error, count } = await query;
