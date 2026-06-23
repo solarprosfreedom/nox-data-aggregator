@@ -74,6 +74,14 @@ Set `DATA_HUB_API_KEY` in `.env.local`.
 - This sync always upserts the full configured Tape view.
 - Scheduled every 15 minutes (offset from Illum) via `vercel.json`.
 
+## Tape customers recurring sync
+
+- Set `TAPE_API_KEY` and `TAPE_CUSTOMERS_VIEW_ID`.
+- Reuse `CRON_SECRET` for auth.
+- Cron endpoint: `POST /api/cron/tape-customers-sync`
+- Upserts into `tape_customers` on `tape_record_id`.
+- Scheduled every 15 minutes (offset from other cron jobs) via `vercel.json`.
+
 ## Architecture
 
 - **`hub_projects`** — unified project/deal records
