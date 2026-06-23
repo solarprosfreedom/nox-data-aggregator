@@ -12,6 +12,9 @@ type TerrosAccountPayload = {
   id?: string;
   accountId?: string;
   resident?: {
+    name?: string;
+    firstName?: string;
+    lastName?: string;
     email?: string;
     phone?: string;
   };
@@ -51,6 +54,22 @@ function fullName(person: TerrosPerson | undefined): string | null {
   const last = normalizedText(person.lastName);
   const combined = [first, last].filter(Boolean).join(" ").trim();
   return combined || null;
+}
+
+function residentName(resident: TerrosAccountPayload["resident"]): {
+  opportunityName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+} {
+  const firstName = normalizedText(resident?.firstName);
+  const lastName = normalizedText(resident?.lastName);
+  const direct = normalizedText(resident?.name);
+  const combined = [firstName, lastName].filter(Boolean).join(" ").trim();
+  return {
+    opportunityName: direct || combined || null,
+    firstName,
+    lastName,
+  };
 }
 
 function unauthorizedIfSecretMismatch(req: NextRequest): NextResponse | null {
@@ -106,9 +125,13 @@ export async function POST(req: NextRequest) {
   const address = data.address ?? data.location;
   const setterName = fullName(data.owner);
   const closerName = fullName(data.closer);
+  const resident = residentName(data.resident);
 
   const upsertRow = {
     account_id: accountId,
+    opportunity_name: resident.opportunityName,
+    first_name: resident.firstName,
+    last_name: resident.lastName,
     email: normalizedEmail(data.resident?.email),
     phone: normalizedText(data.resident?.phone),
     address_line1: normalizedText(address?.line1),

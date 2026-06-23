@@ -23,6 +23,7 @@ const DEAL_PROPERTIES = [
   "dealname",
   "dealstage",
   "pipeline",
+  "hubspot_owner_id",
   "closedate",
   "contact_name",
   "street_address",
@@ -47,6 +48,19 @@ type HubSpotSearchResponse = {
 type PipelineStage = { id: string; label: string };
 type Pipeline = { id: string; label: string; stages: PipelineStage[] };
 type PipelineResponse = { results?: Pipeline[] };
+type HubSpotOwner = {
+  id?: string;
+  userId?: string | number;
+  userIdIncludingInactive?: string | number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+};
+type HubSpotOwnersResponse = {
+  results?: HubSpotOwner[];
+  paging?: { next?: { after?: string } };
+};
+type OwnerInfo = { name: string | null; email: string | null };
 
 type SyncStateRow = {
   sync_key: string;
@@ -173,6 +187,68 @@ async function loadStageLabels(token: string): Promise<{
   return { byPipelineStage, byStage };
 }
 
+function ownerName(owner: HubSpotOwner): string | null {
+  const first = owner.firstName?.trim() ?? "";
+  const last = owner.lastName?.trim() ?? "";
+  const full = [first, last].filter(Boolean).join(" ").trim();
+  if (full) return full;
+  const email = owner.email?.trim();
+  if (email) return email;
+  return null;
+}
+
+async function loadOwnerDirectory(token: string): Promise<Map<string, OwnerInfo>> {
+  const byId = new Map<string, OwnerInfo>();
+  let after: string | undefined;
+
+  do {
+    const path = after
+      ? `/crm/v3/owners/?limit=100&archived=true&after=${encodeURIComponent(after)}`
+      : "/crm/v3/owners/?limit=100&archived=true";
+    const page = await hubSpotRequest<HubSpotOwnersResponse>(token, path);
+
+    for (const owner of page.results ?? []) {
+      const info: OwnerInfo = {
+        name: ownerName(owner),
+        email: owner.email?.trim() || null,
+      };
+      const id = owner.id?.trim();
+      if (id) byId.set(id, info);
+      const userId = owner.userId != null ? String(owner.userId).trim() : "";
+      if (userId) byId.set(userId, info);
+      const userIdIncludingInactive =
+        owner.userIdIncludingInactive != null ? String(owner.userIdIncludingInactive).trim() : "";
+      if (userIdIncludingInactive) byId.set(userIdIncludingInactive, info);
+    }
+
+    after = page.paging?.next?.after;
+  } while (after);
+
+  return byId;
+}
+
+async function hydrateMissingOwners(
+  token: string,
+  ownerDirectory: Map<string, OwnerInfo>,
+  ownerIds: string[],
+): Promise<void> {
+  for (const raw of ownerIds) {
+    const id = raw.trim();
+    if (!id || ownerDirectory.has(id)) continue;
+    try {
+      const owner = await hubSpotRequest<HubSpotOwner>(token, `/crm/v3/owners/${encodeURIComponent(id)}`);
+      const info: OwnerInfo = {
+        name: ownerName(owner),
+        email: owner.email?.trim() || null,
+      };
+      ownerDirectory.set(id, info);
+    } catch {
+      // Keep sync resilient. Some ids may not resolve as owners.
+      continue;
+    }
+  }
+}
+
 function resolveStageLabel(
   pipelineId: string | undefined,
   stageId: string | undefined,
@@ -243,6 +319,7 @@ async function fetchDealsIncremental(
 function mapDealToProjectRow(
   deal: HubSpotDeal,
   labels: { byPipelineStage: Map<string, string>; byStage: Map<string, string> },
+  ownerDirectory: Map<string, OwnerInfo>,
   config: HubSpotSyncConfig,
 ): Record<string, string | number | null> | null {
   const p = deal.properties;
@@ -253,6 +330,14 @@ function mapDealToProjectRow(
   const pipelineId = p.pipeline?.trim();
   const stageId = p.dealstage?.trim();
   const stageLabel = resolveStageLabel(pipelineId, stageId, labels);
+  const ownerId = p.hubspot_owner_id?.trim() || null;
+  const salesRepRaw = p.sales_rep?.trim() || null;
+  const owner = ownerId ? ownerDirectory.get(ownerId) : undefined;
+  const salesRep = salesRepRaw ? ownerDirectory.get(salesRepRaw) : undefined;
+  const setterName = owner?.name ?? ownerId;
+  const setterEmail = owner?.email ?? null;
+  const salesAdvisorName = salesRep?.name ?? salesRepRaw;
+  const salesAdvisorEmail = salesRep?.email ?? null;
 
   return {
     project_id: `${config.projectIdPrefix}${objectId}`,
@@ -266,7 +351,10 @@ function mapDealToProjectRow(
     project_stage: stageLabel,
     contract_signed_date: toDateOnly(p.closedate),
     total_system_cost: parseContract(p.contract),
-    sales_advisor_name: p.sales_rep?.trim() || null,
+    setter_name: setterName,
+    setter_email: setterEmail,
+    sales_advisor_name: salesAdvisorName,
+    sales_advisor_email: salesAdvisorEmail,
     installer: config.installerValue,
   };
 }
@@ -345,12 +433,31 @@ async function runHubSpotSync(
 
   try {
     const labels = await loadStageLabels(token);
+    let ownerDirectory = new Map<string, OwnerInfo>();
+    try {
+      ownerDirectory = await loadOwnerDirectory(token);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Some HubSpot private apps don't have owners.read scope; keep syncing deals anyway.
+      if (!msg.includes("crm.objects.owners.read") && !msg.includes("MISSING_SCOPES")) {
+        throw err;
+      }
+    }
     const { deals, maxLastModifiedMs } = await fetchDealsIncremental(token, sinceMs);
+    const ownerIds = new Set<string>();
+    for (const deal of deals) {
+      const p = deal.properties;
+      const ownerId = p.hubspot_owner_id?.trim();
+      const salesRep = p.sales_rep?.trim();
+      if (ownerId) ownerIds.add(ownerId);
+      if (salesRep) ownerIds.add(salesRep);
+    }
+    await hydrateMissingOwners(token, ownerDirectory, [...ownerIds]);
 
     const mapped: Record<string, string | number | null>[] = [];
     let skipped = 0;
     for (const deal of deals) {
-      const row = mapDealToProjectRow(deal, labels, config);
+      const row = mapDealToProjectRow(deal, labels, ownerDirectory, config);
       if (!row) {
         skipped++;
         continue;
