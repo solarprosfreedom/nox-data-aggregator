@@ -82,10 +82,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const merged = projects.map((p) => {
+  const merged = projects.map((p, i) => {
     const { id, ...rest } = p;
     const remit = latestRemit.get(id as string);
-    const out: Record<string, unknown> = { ...rest };
+    const out: Record<string, unknown> = { row_number: i + 1, ...rest };
     for (const col of REMITTANCE_EXPORT_COLUMNS) {
       out[`remit_${col}`] = remit ? remit[col] ?? null : null;
     }
