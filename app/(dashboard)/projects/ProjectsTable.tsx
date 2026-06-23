@@ -257,17 +257,7 @@ export async function ProjectsTable({
                     />
                   </TD>
                   {/* People */}
-                  <TD>
-                    <div className="flex items-center gap-1.5">
-                      <Str v={p.setter_name} />
-                      {!p.terros_account_id && (
-                        <span
-                          className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-400"
-                          title="No Terros match — setter/closer may be missing"
-                        />
-                      )}
-                    </div>
-                  </TD>
+                  <TD><Str v={p.setter_name} /></TD>
                   <TD><Str v={salesRepName(p)} /></TD>
                   {/* Org */}
                   <TD><Str v={p.installer} /></TD>
