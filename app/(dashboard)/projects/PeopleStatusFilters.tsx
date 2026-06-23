@@ -102,7 +102,7 @@ export default function PeopleStatusFilters({ setters, salesReps, statuses }: Pr
         />
         <FilterSelect
           id="status-filter"
-          label="Filter by Status"
+          label="Filter by Stage"
           value={status}
           options={statuses}
           onChange={(next) => updateParam("status", next)}

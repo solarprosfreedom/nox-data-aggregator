@@ -118,7 +118,7 @@ export default function SyncFilters() {
         />
         <FilterSelect
           id="status-filter"
-          label="Filter by Status"
+          label="Filter by Stage"
           value={status}
           options={statusOptions}
           onChange={setStatus}
