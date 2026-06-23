@@ -3,6 +3,7 @@ import { listProjectsPaged } from "@/lib/data-hub/queries";
 import SortableHeader from "@/components/ui/SortableHeader";
 import type { ProjectSortColumn } from "@/lib/data-hub/project-sort";
 import { computeGrossPpw, computeNetPpw } from "@/lib/data-hub/ppw";
+import { customerDisplayName, resolveStateCode } from "@/lib/data-hub/normalize";
 import ProjectsListClient from "./ProjectsListClient";
 import EditProjectDrawer from "./EditProjectDrawer";
 import DeleteProjectButton from "./DeleteProjectButton";
@@ -57,12 +58,6 @@ function TD({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
   );
 }
 
-function customerName(name: string | null | undefined): string | null {
-  if (!name?.trim()) return null;
-  const idx = name.indexOf(" - ");
-  return (idx >= 0 ? name.slice(0, idx) : name).trim() || null;
-}
-
 function systemSizeWatts(kw: number | null | undefined) {
   if (kw == null) return <span className="text-slate-300">—</span>;
   const n = Number(kw);
@@ -95,6 +90,9 @@ function salesRepName(p: {
 export async function ProjectsTable({
   search,
   installer,
+  setter,
+  salesRep,
+  status,
   page = 1,
   pageSize = 25,
   sort = "updated_at",
@@ -104,6 +102,9 @@ export async function ProjectsTable({
 }: {
   search?: string;
   installer?: string;
+  setter?: string;
+  salesRep?: string;
+  status?: string;
   page?: number;
   pageSize?: number;
   sort?: ProjectSortColumn;
@@ -116,6 +117,9 @@ export async function ProjectsTable({
     pageSize,
     search,
     installer,
+    setter,
+    salesRep,
+    status,
     sort,
     sortDir,
     userEmail,
@@ -129,6 +133,9 @@ export async function ProjectsTable({
       serverSortDir={sortDir}
       serverSearch={search}
       serverInstaller={installer}
+      serverSetter={setter}
+      serverSalesRep={salesRep}
+      serverStatus={status}
       total={total}
       tableMode={projects.length > 0}
     >
@@ -230,7 +237,7 @@ export async function ProjectsTable({
                   </TD>
                   <TD>
                     <span className="font-medium text-slate-900">
-                      <Str v={customerName(p.opportunity_name)} />
+                      <Str v={customerDisplayName(p.opportunity_name)} />
                     </span>
                   </TD>
                   <TD><Str v={p.email} /></TD>
@@ -238,7 +245,7 @@ export async function ProjectsTable({
                   {/* Address */}
                   <TD><Str v={p.address_line1} /></TD>
                   <TD><Str v={p.city} /></TD>
-                  <TD><Str v={p.state_code} /></TD>
+                  <TD><Str v={resolveStateCode(p)} /></TD>
                   <TD><Str v={p.postal_code} /></TD>
                   {/* Deal */}
                   <TD><Str v={projectStage(p.project_stage, p.remittance?.status)} /></TD>

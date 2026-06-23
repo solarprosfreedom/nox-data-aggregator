@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { customerDisplayName, resolveStateCode } from "@/lib/data-hub/normalize";
 
 // Latest-remittance fields promoted onto each project row (prefixed in the CSV).
 const REMITTANCE_EXPORT_COLUMNS = [
@@ -85,7 +86,17 @@ export async function GET(request: NextRequest) {
   const merged = projects.map((p, i) => {
     const { id, ...rest } = p;
     const remit = latestRemit.get(id as string);
-    const out: Record<string, unknown> = { row_number: i + 1, ...rest };
+    const out: Record<string, unknown> = {
+      row_number: i + 1,
+      ...rest,
+      opportunity_name: customerDisplayName(rest.opportunity_name as string | null),
+      state_code: resolveStateCode({
+        state_code: rest.state_code as string | null,
+        address_line1: rest.address_line1 as string | null,
+        opportunity_name: rest.opportunity_name as string | null,
+        postal_code: rest.postal_code as string | null,
+      }),
+    };
     for (const col of REMITTANCE_EXPORT_COLUMNS) {
       out[`remit_${col}`] = remit ? remit[col] ?? null : null;
     }

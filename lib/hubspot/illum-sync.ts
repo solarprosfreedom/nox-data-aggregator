@@ -1,4 +1,8 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import {
+  inferCaliforniaStateFromZip,
+  parseStateCode,
+} from "@/lib/data-hub/normalize";
 
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 const DEFAULT_PAGE_SIZE = 100;
@@ -338,15 +342,22 @@ function mapDealToProjectRow(
   const setterEmail = owner?.email ?? null;
   const salesAdvisorName = salesRep?.name ?? salesRepRaw;
   const salesAdvisorEmail = salesRep?.email ?? null;
+  const streetAddress = p.street_address?.trim() || null;
+  const dealName = p.dealname?.trim() || null;
+  const postalCode = p.postal_code?.trim() || null;
+  const stateCode =
+    parseStateCode(streetAddress, dealName) ??
+    inferCaliforniaStateFromZip(postalCode);
 
   return {
     project_id: `${config.projectIdPrefix}${objectId}`,
-    opportunity_name: p.dealname?.trim() || p.contact_name?.trim() || null,
+    opportunity_name: dealName || p.contact_name?.trim() || null,
     first_name: firstName,
     last_name: lastName,
-    address_line1: p.street_address?.trim() || null,
+    address_line1: streetAddress,
     city: p.city?.trim() || null,
-    postal_code: p.postal_code?.trim() || null,
+    state_code: stateCode,
+    postal_code: postalCode,
     phone: p.phone_number?.trim() || null,
     project_stage: stageLabel,
     contract_signed_date: toDateOnly(p.closedate),

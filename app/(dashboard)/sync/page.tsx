@@ -1,9 +1,10 @@
 import SyncButton from "./SyncButton";
 import SequifiSyncButton from "./SequifiSyncButton";
+import SyncFilters from "./SyncFilters";
 
 export default function SyncPage() {
   return (
-    <div className="max-w-3xl space-y-12">
+    <div className="max-w-4xl">
       <section>
         <h1 className="mb-2 text-2xl font-bold text-slate-900">Sync Setters</h1>
         <p className="mb-6 text-sm text-slate-500">
@@ -20,6 +21,10 @@ export default function SyncPage() {
         </p>
         <SequifiSyncButton />
       </section>
+
+      <div className="my-12 border-t border-slate-200" aria-hidden />
+
+      <SyncFilters />
     </div>
   );
 }

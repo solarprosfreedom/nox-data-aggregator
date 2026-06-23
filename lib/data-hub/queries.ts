@@ -88,6 +88,12 @@ export type ProjectWithRemittance = Project & {
   remittance: RemittanceSummary | null;
 };
 
+export type ProjectFilterValues = {
+  setters: string[];
+  salesReps: string[];
+  statuses: string[];
+};
+
 const REMITTANCE_MERGE_COLUMNS =
   "project_id, payment_date, status, sales_partner, channel, latest_contract, contract_date, finance_type, financier, utility_provider, pv_size, redline_price_tier, contract_amount, gross_ppw, finance_fee, cash_deal_value, battery_price, adder_amount, contract_adder_detail, post_sale_adder_work_order, post_sale_adders, pv_only_price, ppw, down_payment, spif, tpo_rebate, etqa, enfin_dca, light_reach_dca, partner_commission, partner_incentive, re_payment, c0, c1, c2, adjusted_c2, c0_paid, c1_paid, c2_paid, incentive_paid, clawback, others, total_sp_paid, payment_this_week";
 
@@ -166,6 +172,9 @@ export async function listProjectsPaged(opts: {
   pageSize: number;
   search?: string;
   installer?: string;
+  setter?: string;
+  salesRep?: string;
+  status?: string;
   sort?: string;
   sortDir?: string;
   userEmail?: string; // when set, filters to projects where setter_email or closer_email matches
@@ -199,6 +208,21 @@ export async function listProjectsPaged(opts: {
     query = query.eq("installer", opts.installer.trim());
   }
 
+  if (opts.setter?.trim()) {
+    query = query.ilike("setter_name", `%${opts.setter.trim()}%`);
+  }
+
+  if (opts.salesRep?.trim()) {
+    const value = opts.salesRep.trim();
+    query = query.or(
+      `closer_name.ilike.%${value}%,sales_advisor_name.ilike.%${value}%,setter_name.ilike.%${value}%`
+    );
+  }
+
+  if (opts.status?.trim()) {
+    query = query.ilike("project_stage", `%${opts.status.trim()}%`);
+  }
+
   const { data, error, count } = await query;
 
   if (error) {
@@ -208,6 +232,43 @@ export async function listProjectsPaged(opts: {
 
   const rows = await attachRemittance(db, (data ?? []) as Project[]);
   return { rows, total: count ?? 0 };
+}
+
+export async function listProjectFilterValues(): Promise<ProjectFilterValues> {
+  const db = createServerSupabase();
+  const { data, error } = await db
+    .from("projects")
+    .select("setter_name, closer_name, sales_advisor_name, project_stage");
+
+  if (error) {
+    if (error.message.includes("projects")) {
+      return { setters: [], salesReps: [], statuses: [] };
+    }
+    throw new Error(error.message);
+  }
+
+  const setters = new Set<string>();
+  const salesReps = new Set<string>();
+  const statuses = new Set<string>();
+
+  for (const row of data ?? []) {
+    const setter = row.setter_name ? String(row.setter_name).trim() : "";
+    const closer = row.closer_name ? String(row.closer_name).trim() : "";
+    const advisor = row.sales_advisor_name ? String(row.sales_advisor_name).trim() : "";
+    const stage = row.project_stage ? String(row.project_stage).trim() : "";
+
+    if (setter) setters.add(setter);
+    if (closer) salesReps.add(closer);
+    if (advisor) salesReps.add(advisor);
+    if (!closer && !advisor && setter) salesReps.add(setter);
+    if (stage) statuses.add(stage);
+  }
+
+  return {
+    setters: [...setters].sort((a, b) => a.localeCompare(b)),
+    salesReps: [...salesReps].sort((a, b) => a.localeCompare(b)),
+    statuses: [...statuses].sort((a, b) => a.localeCompare(b)),
+  };
 }
 
 export async function getProject(id: string) {

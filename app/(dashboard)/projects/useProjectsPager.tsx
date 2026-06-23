@@ -21,6 +21,9 @@ function readUrlState(searchParams: URLSearchParams) {
     sortDir: searchParams.get("sortDir") ?? "desc",
     q: searchParams.get("q") ?? "",
     installer: searchParams.get("installer") ?? "",
+    setter: searchParams.get("setter") ?? "",
+    salesRep: searchParams.get("salesRep") ?? "",
+    status: searchParams.get("status") ?? "",
   };
 }
 
@@ -31,10 +34,21 @@ export function projectsTableQueryKey(opts: {
   sortDir: string;
   q?: string;
   installer?: string;
+  setter?: string;
+  salesRep?: string;
+  status?: string;
 }) {
-  return [opts.page, opts.pageSize, opts.sort, opts.sortDir, opts.q ?? "", opts.installer ?? ""].join(
-    "|"
-  );
+  return [
+    opts.page,
+    opts.pageSize,
+    opts.sort,
+    opts.sortDir,
+    opts.q ?? "",
+    opts.installer ?? "",
+    opts.setter ?? "",
+    opts.salesRep ?? "",
+    opts.status ?? "",
+  ].join("|");
 }
 
 export function readProjectsUrlState(searchParams: URLSearchParams) {
@@ -58,6 +72,9 @@ export function ProjectsPagerProvider({
   serverSortDir,
   serverSearch,
   serverInstaller,
+  serverSetter,
+  serverSalesRep,
+  serverStatus,
   children,
 }: {
   serverPage: number;
@@ -66,6 +83,9 @@ export function ProjectsPagerProvider({
   serverSortDir: string;
   serverSearch?: string;
   serverInstaller?: string;
+  serverSetter?: string;
+  serverSalesRep?: string;
+  serverStatus?: string;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -112,6 +132,9 @@ export function ProjectsPagerProvider({
       sortDir: serverSortDir,
       q: serverSearch,
       installer: serverInstaller,
+      setter: serverSetter,
+      salesRep: serverSalesRep,
+      status: serverStatus,
     }) ===
     projectsTableQueryKey({
       page: displayPage,
@@ -120,6 +143,9 @@ export function ProjectsPagerProvider({
       sortDir: url.sortDir,
       q: url.q,
       installer: url.installer,
+      setter: url.setter,
+      salesRep: url.salesRep,
+      status: url.status,
     });
 
   const isNavigating = pendingPage !== null || pendingPageSize !== null || !serverSynced;

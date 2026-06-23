@@ -1,11 +1,5 @@
 import { pickField, parseDate, parseNumeric } from "@/lib/csv/parse";
-
-/** Strip " - 123 Main St" address suffixes from opportunity/customer names. */
-function stripAddressSuffix(name: string | null | undefined): string | null {
-  if (!name?.trim()) return null;
-  const idx = name.indexOf(" - ");
-  return (idx >= 0 ? name.slice(0, idx) : name).trim() || null;
-}
+import { customerDisplayName } from "@/lib/data-hub/normalize";
 
 export function mapProjectsSheetRow(row: Record<string, string>) {
   const projectId = pickField(row, "HES ID", "HES Code", "HES_ID", "project_id");
@@ -17,7 +11,7 @@ export function mapProjectsSheetRow(row: Record<string, string>) {
 
   return {
     project_id: projectId,
-    opportunity_name: stripAddressSuffix(
+    opportunity_name: customerDisplayName(
       opportunityName || [firstName, lastName].filter(Boolean).join(" ") || null
     ),
     first_name: firstName || null,

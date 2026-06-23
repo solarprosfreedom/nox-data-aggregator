@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getProject } from "@/lib/data-hub/queries";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { computeGrossPpw, computeNetPpw, formatPpw } from "@/lib/data-hub/ppw";
+import { customerDisplayName } from "@/lib/data-hub/normalize";
 
 function Section({
   title,
@@ -38,13 +39,6 @@ function formatUsPhone(value: unknown): string {
     digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
   if (normalized.length !== 10) return raw;
   return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6)}`;
-}
-
-function customerName(name: unknown): string | null {
-  if (name == null || name === "") return null;
-  const s = String(name).trim();
-  const idx = s.indexOf(" - ");
-  return (idx >= 0 ? s.slice(0, idx) : s).trim() || null;
 }
 
 function systemSizeWatts(kw: unknown): string | null {
@@ -99,7 +93,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
     latestRemit?.adder_amount
   );
   const displayName =
-    customerName(p.opportunity_name) ?? (p.project_id as string);
+    customerDisplayName(p.opportunity_name as string) ?? (p.project_id as string);
   const stage =
     latestRemitStatus?.trim() || (p.project_stage as string | undefined)?.trim() || null;
   const salesRep =
