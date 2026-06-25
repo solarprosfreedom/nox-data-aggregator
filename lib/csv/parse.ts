@@ -126,6 +126,27 @@ export function parseDate(value: string): string | null {
   return d.toISOString().slice(0, 10);
 }
 
+/** YYYY-MM-DD from Axia-style title row or filename (e.g. Commission_Report_20260625). */
+export function inferRemittancePaymentDate(
+  content: string,
+  fileName?: string
+): string | null {
+  const firstLine = normalizeCsvText(content).split("\n", 1)[0] ?? "";
+  const titleMatch = firstLine.match(/\|\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/);
+  if (titleMatch?.[1]) {
+    const parsed = parseDate(titleMatch[1]);
+    if (parsed) return parsed;
+  }
+
+  const fileMatch = fileName?.match(/(?:^|[^\d])(20\d{6})(?:[^\d]|$)/);
+  if (fileMatch?.[1]) {
+    const s = fileMatch[1];
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  }
+
+  return null;
+}
+
 export function parseNumeric(value: string): number | null {
   const v = value.replace(/[$,\s]/g, "").trim();
   if (!v || v === "-") return null;

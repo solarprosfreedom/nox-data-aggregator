@@ -225,13 +225,10 @@ export async function importWithMapping(
           affectedProjectIds.add(projectUuid);
         }
       } else {
-        const paymentDate =
-          (remittancePatch.payment_date as string | undefined) ??
-          new Date().toISOString().slice(0, 10);
-
         const { error } = await db.from("remittance").insert({
           ...remittancePatch,
-          payment_date: paymentDate,
+          payment_date:
+            (remittancePatch.payment_date as string | undefined) ?? null,
           project_id: projectUuid,
           file_name: String(fileName ?? "manual"),
           file_hash: importFileHash,

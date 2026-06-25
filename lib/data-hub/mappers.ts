@@ -68,10 +68,18 @@ export function mapTerrosRow(row: Record<string, string>) {
   };
 }
 
-export function mapRemittanceRow(row: Record<string, string>, rowNumber: number) {
+export function mapRemittanceRow(
+  row: Record<string, string>,
+  rowNumber: number,
+  options?: { defaultPaymentDate?: string | null }
+) {
   const hesCode = pickField(row, "HES Code", "HES ID");
-  const paymentDate = parseDate(pickField(row, "Payment date", "Payment Date"));
-  if (!hesCode || !paymentDate) return null;
+  if (!hesCode) return null;
+
+  const paymentDate =
+    parseDate(pickField(row, "Payment date", "Payment Date")) ??
+    options?.defaultPaymentDate ??
+    null;
 
   return {
     payment_date: paymentDate,
@@ -114,15 +122,27 @@ export function mapRemittanceRow(row: Record<string, string>, rowNumber: number)
     spif: parseNumeric(pickField(row, "⑨ SPIF", "SPIF")),
     tpo_rebate: parseNumeric(pickField(row, "⑩ TPO Rebate (Jan 1st - Nov 30 )", "⑩ TPO Rebate", "TPO Rebate")),
     etqa: parseNumeric(pickField(row, "⑪ETQA (Apr 1st - Apr 30th)", "ETQA")),
-    enfin_dca: parseNumeric(pickField(row, "⑫Enfin DCA (May 1st - )", "Enfin DCA")),
+    enfin_dca: parseNumeric(
+      pickField(row, "⑫Enfin DCA (May 1st - )", "Enfin DCA", "DCA")
+    ),
     light_reach_dca: parseNumeric(
       pickField(row, "⑬ Light Reach DCA (Oct 1st - ", "Light Reach DCA")
     ),
     partner_commission: parseNumeric(
-      pickField(row, "Partner's Commission (⑦-①*②-⑥-⑧+⑨)", "Partner Commission")
+      pickField(
+        row,
+        "Partner's Commission (⑦-①*②-⑥-⑧+⑨)",
+        "Partner's Commission",
+        "Partner Commission"
+      )
     ),
     partner_incentive: parseNumeric(
-      pickField(row, "Partner's Incentive (⑩+⑪+⑫+⑬)", "Partner Incentive")
+      pickField(
+        row,
+        "Partner's Incentive (⑩+⑪+⑫+⑬)",
+        "Partner's Incentive",
+        "Partner Incentive"
+      )
     ),
     re_payment: parseNumeric(pickField(row, "Re-Payment (starting on 7/1)", "Re-Payment")),
     c0: parseNumeric(pickField(row, "C0")),

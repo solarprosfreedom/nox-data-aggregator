@@ -125,7 +125,7 @@ export const REMITTANCE_FIELDS: readonly FieldDef[] = TABLE_MAPPER_FIELDS.filter
 export const REMITTANCE_LEGACY_FIELDS: readonly FieldDef[] = [
   { key: "hes_code", label: "HES Code / Project ID", required: true, group: "Identity" },
   ...REMITTANCE_FIELDS.map((f) =>
-    f.key === "payment_date" ? { ...f, required: true, group: "Identity" } : f,
+    f.key === "payment_date" ? { ...f, group: "Identity" } : f,
   ),
 ];
 

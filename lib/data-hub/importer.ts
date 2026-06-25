@@ -2,7 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ImportSource } from "@/lib/data-hub/normalize";
 import { mapProjectsSheetRow, mapRemittanceRow } from "@/lib/data-hub/mappers";
 import { refreshNetEpcForProjects } from "@/lib/data-hub/remittance-project-sync";
-import { parseCsv, rowsToRecords } from "@/lib/csv/parse";
+import {
+  findHeaderRowIndex,
+  inferRemittancePaymentDate,
+  parseCsv,
+  rowsToRecords,
+} from "@/lib/csv/parse";
 
 export type ImportResult = {
   importId: string;
@@ -66,8 +71,14 @@ export async function processImport(options: {
   }
 
   const importId = logRow.id as string;
-  const rows = rowsToRecords(parseCsv(content));
+  const parsedRows = parseCsv(content);
+  const headerIdx = findHeaderRowIndex(parsedRows);
+  const rows = rowsToRecords(parsedRows);
   const rowCount = rows.length;
+  const defaultPaymentDate =
+    source === "remittance"
+      ? inferRemittancePaymentDate(content, fileName)
+      : null;
 
   try {
     if (source === "projects_sheet") {
@@ -103,9 +114,12 @@ export async function processImport(options: {
       // remittance
       const affectedProjectIds = new Set<string>();
       for (let i = 0; i < rows.length; i++) {
-        const mapped = mapRemittanceRow(rows[i]!, i + 2);
+        const csvRowNumber = headerIdx + 2 + i;
+        const mapped = mapRemittanceRow(rows[i]!, csvRowNumber, {
+          defaultPaymentDate,
+        });
         if (!mapped) {
-          errorMessages.push(`Row ${i + 2}: missing HES Code or Payment date`);
+          errorMessages.push(`Row ${csvRowNumber}: missing HES Code`);
           continue;
         }
 
