@@ -6,7 +6,12 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { parseSampleCsvMetadata } from "@/lib/data-hub/samples";
 import type { SampleCsvSourceType } from "@/lib/data-hub/samples";
 import { parseCsv, rowsToRecords } from "@/lib/csv/parse";
-import { applyMapping } from "@/lib/data-hub/field-mapper";
+import {
+  applyMapping,
+  hasRemittancePatch,
+  splitMappedPatch,
+  type SchemaType,
+} from "@/lib/data-hub/field-mapper";
 import type { MappingTemplate } from "@/lib/data-hub/mapping-templates";
 
 export type UploadSampleResult =
@@ -84,7 +89,14 @@ export async function uploadSampleCsv(formData: FormData): Promise<UploadSampleR
 }
 
 export type ImportWithMappingResult =
-  | { inserted: number; updated: number; errors: number; errorMessages: string[] }
+  | {
+      inserted: number;
+      updated: number;
+      remittanceInserted: number;
+      remittanceUpdated: number;
+      errors: number;
+      errorMessages: string[];
+    }
   | { error: string };
 
 export async function importWithMapping(
@@ -96,7 +108,7 @@ export async function importWithMapping(
   const content = formData.get("content");
   const fileName = formData.get("fileName");
   const mappingRaw = formData.get("mapping");
-  const schema = (formData.get("schema") ?? "projects") as "projects" | "remittance";
+  const schema = (formData.get("schema") ?? "projects") as SchemaType;
   const installer = String(formData.get("installer") ?? "").trim() || null;
 
   if (typeof content !== "string" || !content.trim())
@@ -116,68 +128,131 @@ export async function importWithMapping(
   const db = createServerSupabase();
   let inserted = 0;
   let updated = 0;
+  let remittanceInserted = 0;
+  let remittanceUpdated = 0;
   const errorMessages: string[] = [];
+  const affectedProjectIds = new Set<string>();
+  const importFileHash = `${String(fileName ?? "manual")}-${Date.now()}`;
 
   for (let i = 0; i < rows.length; i++) {
     const patch = applyMapping(rows[i]!, mapping, schema);
 
     if (schema === "remittance") {
       const hesCode = patch.hes_code as string | undefined;
-      const paymentDate = patch.payment_date as string | undefined;
-      if (!hesCode || !paymentDate) {
-        errorMessages.push(`Row ${i + 2}: missing HES Code or Payment Date — skipped`);
-        continue;
-      }
+      if (hesCode && !patch.project_id) patch.project_id = hesCode;
+    }
 
-      // Link to project if possible
-      const { data: project } = await db
-        .from("projects")
-        .select("id")
-        .eq("project_id", hesCode)
-        .maybeSingle();
+    const { project: projectPatch, remittance: remittancePatch } = splitMappedPatch(patch);
+    const projectId = projectPatch.project_id as string | undefined;
 
-      const fileHash = String(fileName ?? "manual") + "-" + Date.now();
-      const remittanceRow = {
-        ...patch,
-        project_id: project?.id ?? null,
-        file_name: String(fileName ?? "manual"),
-        file_hash: fileHash,
-        row_number: i + 2,
-        raw_row: rows[i],
-      };
+    if (!projectId?.trim()) {
+      errorMessages.push(`Row ${i + 2}: missing Project ID / HES Code — skipped`);
+      continue;
+    }
 
-      const { error } = await db.from("remittance").insert(remittanceRow);
-      if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
-      else inserted++;
-    } else {
-      const projectId = patch.project_id as string | undefined;
-      if (!projectId) {
-        errorMessages.push(`Row ${i + 2}: missing Project ID — skipped`);
-        continue;
-      }
+    const normalizedProjectId = projectId.trim();
+    projectPatch.project_id = normalizedProjectId;
 
-      patch.updated_at = new Date().toISOString();
-      if (installer) patch.installer = installer;
+    if (installer) projectPatch.installer = installer;
 
-      const { data: existing } = await db
-        .from("projects")
-        .select("id")
-        .eq("project_id", projectId)
-        .maybeSingle();
+    const meaningfulProjectKeys = Object.keys(projectPatch).filter(
+      (k) => k !== "project_id",
+    );
 
-      if (existing) {
+    let projectUuid: string | null = null;
+
+    const { data: existing } = await db
+      .from("projects")
+      .select("id")
+      .eq("project_id", normalizedProjectId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      projectUuid = existing.id;
+      if (meaningfulProjectKeys.length > 0) {
+        projectPatch.updated_at = new Date().toISOString();
+        const { project_id: _pid, ...projectUpdate } = projectPatch;
         const { error } = await db
           .from("projects")
-          .update(patch)
+          .update(projectUpdate)
           .eq("id", existing.id);
-        if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
-        else updated++;
+        if (error) {
+          errorMessages.push(`Row ${i + 2}: ${error.message}`);
+          continue;
+        }
+        updated++;
+      }
+    } else {
+      projectPatch.updated_at = new Date().toISOString();
+      const { data: created, error } = await db
+        .from("projects")
+        .insert(projectPatch)
+        .select("id")
+        .single();
+      if (error) {
+        errorMessages.push(`Row ${i + 2}: ${error.message}`);
+        continue;
+      }
+      projectUuid = created.id as string;
+      inserted++;
+    }
+
+    if (!projectUuid) continue;
+
+    if (hasRemittancePatch(remittancePatch)) {
+      remittancePatch.hes_code = normalizedProjectId;
+
+      const { data: latestRows, error: latestErr } = await db.rpc(
+        "latest_remittance_for_projects",
+        { project_ids: [projectUuid] },
+      );
+      if (latestErr) {
+        errorMessages.push(`Row ${i + 2}: remittance lookup failed — ${latestErr.message}`);
+        continue;
+      }
+
+      const latest = (latestRows ?? [])[0] as { id?: string | number } | undefined;
+
+      if (latest?.id != null) {
+        const { error } = await db
+          .from("remittance")
+          .update(remittancePatch)
+          .eq("id", latest.id);
+        if (error) {
+          errorMessages.push(`Row ${i + 2}: remittance update — ${error.message}`);
+        } else {
+          remittanceUpdated++;
+          affectedProjectIds.add(projectUuid);
+        }
       } else {
-        const { error } = await db.from("projects").insert(patch);
-        if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
-        else inserted++;
+        const paymentDate =
+          (remittancePatch.payment_date as string | undefined) ??
+          new Date().toISOString().slice(0, 10);
+
+        const { error } = await db.from("remittance").insert({
+          ...remittancePatch,
+          payment_date: paymentDate,
+          project_id: projectUuid,
+          file_name: String(fileName ?? "manual"),
+          file_hash: importFileHash,
+          row_number: i + 2,
+          raw_row: rows[i],
+        });
+        if (error) {
+          errorMessages.push(`Row ${i + 2}: remittance insert — ${error.message}`);
+        } else {
+          remittanceInserted++;
+          affectedProjectIds.add(projectUuid);
+        }
       }
     }
+  }
+
+  if (affectedProjectIds.size > 0) {
+    const { refreshNetEpcForProjects } = await import(
+      "@/lib/data-hub/remittance-project-sync"
+    );
+    await refreshNetEpcForProjects(db, [...affectedProjectIds]);
   }
 
   revalidatePath("/projects");
@@ -185,6 +260,8 @@ export async function importWithMapping(
   return {
     inserted,
     updated,
+    remittanceInserted,
+    remittanceUpdated,
     errors: errorMessages.length,
     errorMessages: errorMessages.slice(0, 20),
   };

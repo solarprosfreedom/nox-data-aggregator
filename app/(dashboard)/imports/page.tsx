@@ -41,8 +41,9 @@ export default async function ImportsPage() {
         fieldMapper={
           <div>
             <p className="mb-4 text-sm text-slate-500">
-              For non-standard CSVs (e.g. Axia installer files). Map each column
-              to the correct field before importing.
+              For non-standard CSVs (e.g. Axia installer files). Map each column to
+              project or remittance fields in one step — existing projects are updated
+              with whatever columns are in the file.
             </p>
             <MappingForm installers={installers} initialTemplates={templates} />
           </div>

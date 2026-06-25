@@ -5,9 +5,11 @@ import CsvDropZone from "@/components/ui/CsvDropZone";
 import InstallerSelect from "@/components/ui/InstallerSelect";
 import {
   getFields,
+  getRequiredFieldKeys,
+  isFieldMappingBlocked,
+  normalizeTemplateColumnMap,
   SKIP,
   autoSuggestMapping,
-  type SchemaType,
 } from "@/lib/data-hub/field-mapper";
 import { parseCsv, rowsToRecords, findHeaderRowIndex } from "@/lib/csv/parse";
 import type { MappingTemplate } from "@/lib/data-hub/mapping-templates";
@@ -23,28 +25,25 @@ type Step = "upload" | "map" | "done";
 type ImportResult = {
   inserted: number;
   updated: number;
+  remittanceInserted: number;
+  remittanceUpdated: number;
   errors: number;
   errorMessages: string[];
 };
-
-const SCHEMAS: { value: SchemaType; label: string; hint: string }[] = [
-  { value: "projects", label: "Projects", hint: "Requires Project ID / HES ID" },
-  { value: "remittance", label: "Remittance", hint: "Requires HES Code + Payment Date" },
-];
 
 function applyTemplateToHeaders(
   csvHeaders: string[],
   originalHeaders: string[],
   templateMap: Record<string, string>,
-  schema: SchemaType
 ): Record<string, string> {
-  const base = autoSuggestMapping(csvHeaders, schema);
+  const normalizedMap = normalizeTemplateColumnMap(templateMap);
+  const base = autoSuggestMapping(csvHeaders, "projects");
   const usedFields = new Set<string>();
 
   for (let idx = 0; idx < csvHeaders.length; idx++) {
     const deduped = csvHeaders[idx]!;
     const original = originalHeaders[idx] ?? deduped;
-    const fieldKey = templateMap[original] ?? templateMap[deduped];
+    const fieldKey = normalizedMap[original] ?? normalizedMap[deduped];
     if (fieldKey && fieldKey !== SKIP && !usedFields.has(fieldKey)) {
       base[deduped] = fieldKey;
       usedFields.add(fieldKey);
@@ -63,7 +62,6 @@ export default function MappingForm({
 }) {
   const [step, setStep] = useState<Step>("upload");
   const [fileKey, setFileKey] = useState(0);
-  const [schema, setSchema] = useState<SchemaType>("projects");
   const [installer, setInstaller] = useState("");
   const [fileName, setFileName] = useState("");
   const [csvContent, setCsvContent] = useState("");
@@ -80,21 +78,22 @@ export default function MappingForm({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const schemaTemplates = useMemo(
-    () => templates.filter((t) => t.schema_type === schema),
-    [templates, schema]
+    () => templates.filter((t) => t.schema_type === "projects" || t.schema_type === "remittance"),
+    [templates],
   );
 
   useEffect(() => {
     startTransition(async () => {
-      const res = await fetchMappingTemplates(schema, installer || undefined);
-      if (Array.isArray(res)) setTemplates((prev) => {
-        const other = prev.filter((t) => t.schema_type !== schema);
-        return [...res, ...other].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      const res = await fetchMappingTemplates(undefined, installer || undefined);
+      if (Array.isArray(res)) {
+        setTemplates(
+          res.sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+          ),
         );
-      });
+      }
     });
-  }, [schema, installer]);
+  }, [installer]);
 
   const handleFileSelect = useCallback(
     async (file: File) => {
@@ -118,9 +117,9 @@ export default function MappingForm({
 
       const template = schemaTemplates.find((t) => t.id === selectedTemplateId);
       if (template) {
-        setMapping(applyTemplateToHeaders(deduped, rawHeaders, template.column_map, schema));
+        setMapping(applyTemplateToHeaders(deduped, rawHeaders, template.column_map));
       } else {
-        setMapping(autoSuggestMapping(deduped, schema));
+        setMapping(autoSuggestMapping(deduped, "projects"));
       }
 
       setStep("map");
@@ -128,7 +127,7 @@ export default function MappingForm({
       setError(null);
       setSaveMessage(null);
     },
-    [schema, schemaTemplates, selectedTemplateId]
+    [schemaTemplates, selectedTemplateId],
   );
 
   function loadTemplate(templateId: string) {
@@ -136,9 +135,7 @@ export default function MappingForm({
     if (!templateId || csvHeaders.length === 0) return;
     const template = templates.find((t) => t.id === templateId);
     if (!template) return;
-    setMapping(
-      applyTemplateToHeaders(csvHeaders, originalHeaders, template.column_map, schema)
-    );
+    setMapping(applyTemplateToHeaders(csvHeaders, originalHeaders, template.column_map));
     if (template.installer_name) setInstaller(template.installer_name);
     setTemplateName(template.name);
   }
@@ -162,7 +159,7 @@ export default function MappingForm({
     const fd = new FormData();
     fd.set("content", csvContent);
     fd.set("fileName", fileName);
-    fd.set("schema", schema);
+    fd.set("schema", "projects");
     fd.set("installer", installer);
     fd.set("mapping", JSON.stringify(resolvedColumnMap()));
 
@@ -180,8 +177,8 @@ export default function MappingForm({
   function handleSaveTemplate() {
     setSaveMessage(null);
     const fd = new FormData();
-    fd.set("name", templateName.trim() || `${installer || "Generic"} ${schema} mapping`);
-    fd.set("schema_type", schema);
+    fd.set("name", templateName.trim() || `${installer || "Generic"} mapping`);
+    fd.set("schema_type", "projects");
     fd.set("installer_name", installer);
     fd.set("column_map", JSON.stringify(resolvedColumnMap()));
     if (selectedTemplateId) fd.set("id", selectedTemplateId);
@@ -194,14 +191,13 @@ export default function MappingForm({
       }
       setSelectedTemplateId(res.id);
       setSaveMessage("Template saved.");
-      const refreshed = await fetchMappingTemplates(schema, installer || undefined);
+      const refreshed = await fetchMappingTemplates(undefined, installer || undefined);
       if (Array.isArray(refreshed)) {
-        setTemplates((prev) => {
-          const other = prev.filter((t) => t.schema_type !== schema);
-          return [...refreshed, ...other].sort(
-            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-        });
+        setTemplates(
+          refreshed.sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+          ),
+        );
       }
     });
   }
@@ -234,11 +230,11 @@ export default function MappingForm({
     setSaveMessage(null);
   }
 
-  const fields = getFields(schema);
+  const fields = getFields("projects");
   const mappedFields = new Set(
-    Object.values(mapping).filter((v) => v !== SKIP && v !== "")
+    Object.values(mapping).filter((v) => v !== SKIP && v !== ""),
   );
-  const requiredFields = fields.filter((f) => f.required).map((f) => f.key);
+  const requiredFields = getRequiredFieldKeys("projects");
   const missingRequired = requiredFields.filter((k) => !mappedFields.has(k));
 
   if (step === "upload") {
@@ -246,49 +242,21 @@ export default function MappingForm({
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Upload a CSV to map</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Drop any installer CSV — we&apos;ll detect the columns and let you
-          assign each one to the correct field.
+          Map columns to project and remittance fields in one pass. Existing projects
+          are updated with whatever columns are in your file.
         </p>
 
         <div className="mt-5">
-          <p className="mb-2 text-sm font-medium text-slate-700">
-            What are you importing?
-          </p>
-          <div className="flex gap-3">
-            {SCHEMAS.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => {
-                  setSchema(s.value);
-                  setSelectedTemplateId("");
-                }}
-                className={`flex-1 rounded-xl border-2 p-3 text-left transition ${
-                  schema === s.value
-                    ? "border-cyan-500 bg-cyan-50"
-                    : "border-slate-200 hover:border-slate-300"
-                }`}
-              >
-                <p className="text-sm font-semibold text-slate-900">{s.label}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{s.hint}</p>
-              </button>
-            ))}
-          </div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Installer
+          </label>
+          <InstallerSelect
+            options={installers}
+            value={installer}
+            onChange={setInstaller}
+            placeholder="Apply to all rows (optional)…"
+          />
         </div>
-
-        {schema === "projects" && (
-          <div className="mt-5">
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Installer
-            </label>
-            <InstallerSelect
-              options={installers}
-              value={installer}
-              onChange={setInstaller}
-              placeholder="Apply to all rows (optional)…"
-            />
-          </div>
-        )}
 
         {schemaTemplates.length > 0 && (
           <div className="mt-5">
@@ -332,8 +300,15 @@ export default function MappingForm({
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Import complete</h2>
             <p className="mt-1 text-sm text-slate-600">
-              {result.inserted} new rows added, {result.updated} updated
-              {result.errors > 0 && `, ${result.errors} rows had errors`}.
+              {result.inserted} projects created, {result.updated} projects updated.
+              {result.remittanceInserted + result.remittanceUpdated > 0 && (
+                <>
+                  {" "}
+                  Remittance: {result.remittanceInserted} new, {result.remittanceUpdated}{" "}
+                  updated.
+                </>
+              )}
+              {result.errors > 0 && ` ${result.errors} rows had errors.`}
             </p>
             {result.errorMessages.length > 0 && (
               <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -358,7 +333,7 @@ export default function MappingForm({
         <div>
           <span className="text-sm font-medium text-slate-800">{fileName}</span>
           <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-            {schema === "remittance" ? "Remittance" : "Projects"}
+            Projects + Remittance
           </span>
           <span className="ml-2 text-xs text-slate-400">
             {csvHeaders.length} columns detected
@@ -369,27 +344,25 @@ export default function MappingForm({
         </button>
       </div>
 
-      {schema === "projects" && (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Installer for this batch
-          </label>
-          <InstallerSelect
-            options={installers}
-            value={installer}
-            onChange={setInstaller}
-            placeholder="Apply to all rows (optional)…"
-          />
-        </div>
-      )}
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          Installer for this batch
+        </label>
+        <InstallerSelect
+          options={installers}
+          value={installer}
+          onChange={setInstaller}
+          placeholder="Apply to all rows (optional)…"
+        />
+      </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-3">
           <h2 className="text-sm font-semibold text-slate-900">Column mapping</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            We auto-matched your CSV columns to{" "}
-            {schema === "remittance" ? "remittance" : "project"} fields. Correct
-            any wrong ones, then click Import.
+            Map CSV columns to project or remittance fields. Only mapped columns are
+            written. Existing projects get partial updates; remittance updates the latest
+            row for that project.
           </p>
         </div>
 
@@ -423,7 +396,11 @@ export default function MappingForm({
                           <option
                             key={f.key}
                             value={f.key}
-                            disabled={mappedFields.has(f.key) && selected !== f.key}
+                            disabled={isFieldMappingBlocked(
+                              f.key,
+                              mappedFields,
+                              selected,
+                            )}
                           >
                             {f.label}
                             {f.required ? " *" : ""}
@@ -451,7 +428,7 @@ export default function MappingForm({
             {csvHeaders.length} columns mapped
             {missingRequired.length > 0 && (
               <span className="ml-2 font-medium text-amber-600">
-                ⚠ Required:{" "}
+                Required:{" "}
                 {missingRequired
                   .map((k) => fields.find((f) => f.key === k)?.label ?? k)
                   .join(", ")}
@@ -488,7 +465,7 @@ export default function MappingForm({
               type="text"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="Axia projects v1"
+              placeholder="Axia combined v1"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
@@ -524,7 +501,15 @@ export default function MappingForm({
           )}
         </div>
         {saveMessage && (
-          <p className={`mt-2 text-xs ${saveMessage.includes("failed") || saveMessage.includes("error") || saveMessage.includes("required") ? "text-red-600" : "text-emerald-600"}`}>
+          <p
+            className={`mt-2 text-xs ${
+              saveMessage.includes("failed") ||
+              saveMessage.includes("error") ||
+              saveMessage.includes("required")
+                ? "text-red-600"
+                : "text-emerald-600"
+            }`}
+          >
             {saveMessage}
           </p>
         )}

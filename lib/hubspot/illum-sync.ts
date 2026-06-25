@@ -22,6 +22,9 @@ const ILLUM_SYNC_CONFIG: HubSpotSyncConfig = {
   installerValue: "Illum",
 };
 
+/** HubSpot closedate floor (maps to projects.contract_signed_date). */
+const MIN_CLOSE_DATE_MS = Date.parse("2026-01-01T00:00:00.000Z");
+
 const DEAL_PROPERTIES = [
   "hs_object_id",
   "dealname",
@@ -287,19 +290,22 @@ async function fetchDealsIncremental(
       limit: DEFAULT_PAGE_SIZE,
     };
     if (after) body.after = after;
+
+    const filters: { propertyName: string; operator: string; value: string }[] = [
+      {
+        propertyName: "closedate",
+        operator: "GTE",
+        value: String(MIN_CLOSE_DATE_MS),
+      },
+    ];
     if (sinceMs != null) {
-      body.filterGroups = [
-        {
-          filters: [
-            {
-              propertyName: "hs_lastmodifieddate",
-              operator: "GT",
-              value: String(sinceMs),
-            },
-          ],
-        },
-      ];
+      filters.push({
+        propertyName: "hs_lastmodifieddate",
+        operator: "GT",
+        value: String(sinceMs),
+      });
     }
+    body.filterGroups = [{ filters }];
 
     const page = await hubSpotRequest<HubSpotSearchResponse>(token, "/crm/v3/objects/deals/search", {
       method: "POST",
