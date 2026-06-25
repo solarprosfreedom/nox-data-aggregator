@@ -19,6 +19,17 @@ export type ImportResult = {
   errorMessages: string[];
 };
 
+const REMITTANCE_UPSERT_CHUNK = 100;
+const PROJECT_LOOKUP_CHUNK = 200;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
 export async function processImport(options: {
   db: SupabaseClient;
   source: ImportSource;
@@ -111,8 +122,13 @@ export async function processImport(options: {
         }
       }
     } else {
-      // remittance
+      // remittance — batch project lookups and upserts (one row-at-a-time is very slow)
       const affectedProjectIds = new Set<string>();
+      const pendingRows: {
+        csvRowNumber: number;
+        mapped: NonNullable<ReturnType<typeof mapRemittanceRow>>;
+      }[] = [];
+
       for (let i = 0; i < rows.length; i++) {
         const csvRowNumber = headerIdx + 2 + i;
         const mapped = mapRemittanceRow(rows[i]!, csvRowNumber, {
@@ -122,36 +138,58 @@ export async function processImport(options: {
           errorMessages.push(`Row ${csvRowNumber}: missing HES Code`);
           continue;
         }
+        pendingRows.push({ csvRowNumber, mapped });
+      }
 
-        // Try to link to an existing project by HES Code = project_id
-        const { data: project } = await db
+      const hesCodes = [...new Set(pendingRows.map((r) => r.mapped.hes_code))];
+      const projectIdByHes = new Map<string, string>();
+
+      for (const codeChunk of chunk(hesCodes, PROJECT_LOOKUP_CHUNK)) {
+        const { data: projects, error: lookupErr } = await db
           .from("projects")
-          .select("id")
-          .eq("project_id", mapped.hes_code)
-          .maybeSingle();
+          .select("id, project_id")
+          .in("project_id", codeChunk);
 
-        if (project?.id) {
-          matched++;
-          affectedProjectIds.add(project.id);
+        if (lookupErr) {
+          throw new Error(`Project lookup failed: ${lookupErr.message}`);
         }
 
-        const remittanceRow = {
+        for (const project of projects ?? []) {
+          if (project.project_id && project.id) {
+            projectIdByHes.set(project.project_id, project.id);
+          }
+        }
+      }
+
+      const remittanceRows = pendingRows.map(({ csvRowNumber, mapped }) => {
+        const projectId = projectIdByHes.get(mapped.hes_code) ?? null;
+        if (projectId) {
+          matched++;
+          affectedProjectIds.add(projectId);
+        }
+        return {
           ...mapped,
-          project_id: project?.id ?? null,
+          project_id: projectId,
           file_name: fileName,
           file_hash: fileHash,
+          _csvRowNumber: csvRowNumber,
         };
+      });
 
-        const { error } = await db.from("remittance").upsert(remittanceRow, {
+      for (const rowChunk of chunk(remittanceRows, REMITTANCE_UPSERT_CHUNK)) {
+        const payload = rowChunk.map(({ _csvRowNumber: _, ...row }) => row);
+        const { error } = await db.from("remittance").upsert(payload, {
           onConflict: "file_hash,row_number",
         });
 
         if (error) {
-          errorMessages.push(`Row ${i + 2}: ${error.message}`);
+          for (const row of rowChunk) {
+            errorMessages.push(`Row ${row._csvRowNumber}: ${error.message}`);
+          }
           continue;
         }
 
-        inserted++;
+        inserted += rowChunk.length;
       }
 
       if (affectedProjectIds.size > 0) {

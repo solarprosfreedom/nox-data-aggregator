@@ -8,6 +8,7 @@ import {
   IMPORT_SOURCE_LABELS,
   type ImportSource,
 } from "@/lib/data-hub/normalize";
+import { parseCsv, rowsToRecords } from "@/lib/csv/parse";
 import { uploadImportFile } from "./actions";
 
 const ENABLED_SOURCES: ImportSource[] = ["projects_sheet", "remittance"];
@@ -21,6 +22,7 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
   const [installer, setInstaller] = useState("");
   const [autoDetected, setAutoDetected] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [rowEstimate, setRowEstimate] = useState<number | null>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
     setDetecting(true);
@@ -31,6 +33,7 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
         ENABLED_SOURCES.includes(detected) ? detected : "projects_sheet";
       setSource(resolved);
       setAutoDetected(true);
+      setRowEstimate(rowsToRecords(parseCsv(text)).length);
     } finally {
       setDetecting(false);
     }
@@ -40,6 +43,7 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
     setSource("projects_sheet");
     setInstaller("");
     setAutoDetected(false);
+    setRowEstimate(null);
     setFileKey((k) => k + 1);
   };
 
@@ -153,6 +157,28 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
         >
           {pending ? "Importing…" : "Upload & import"}
         </button>
+
+        {pending && (
+          <div
+            className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-950"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-2 font-medium">
+              <span
+                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-cyan-600 border-t-transparent"
+                aria-hidden
+              />
+              {rowEstimate != null
+                ? `Importing ${rowEstimate} rows…`
+                : "Importing…"}
+            </div>
+            <p className="mt-1 text-xs text-cyan-800">
+              Saving to the database and linking projects. Please keep this tab
+              open until the import finishes.
+            </p>
+          </div>
+        )}
       </div>
 
       {result && (
