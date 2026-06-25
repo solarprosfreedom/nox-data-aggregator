@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { listProjectsPaged } from "@/lib/data-hub/queries";
-import SortableHeader from "@/components/ui/SortableHeader";
+import SortableColumnHeader from "@/components/ui/SortableColumnHeader";
+import ColumnHeader from "@/components/ui/ColumnHeader";
+import type { ParsedColumnFilters } from "@/lib/data-hub/column-filters";
 import type { ProjectSortColumn } from "@/lib/data-hub/project-sort";
 import { computeGrossPpw, computeNetPpw } from "@/lib/data-hub/ppw";
 import { customerDisplayName, resolveStateCode } from "@/lib/data-hub/normalize";
-import ProjectsListClient from "./ProjectsListClient";
 import EditProjectDrawer from "./EditProjectDrawer";
 import DeleteProjectButton from "./DeleteProjectButton";
+import TableLoadNotifier from "./TableLoadNotifier";
+import { TableTotalNotifier } from "./ProjectsTableMeta";
 
 function Str({ v }: { v: unknown }) {
   if (v == null || v === "") return <span className="text-slate-300">—</span>;
@@ -88,6 +91,7 @@ function salesRepName(p: {
 }
 
 export async function ProjectsTable({
+  queryKey,
   search,
   installer,
   setter,
@@ -99,12 +103,20 @@ export async function ProjectsTable({
   sortDir = "desc",
   userEmail,
   isAdmin = true,
+  columnFilters = { advanced: {}, multiSelect: {} },
+  filterOptions,
 }: {
+  queryKey: string;
   search?: string;
   installer?: string;
   setter?: string;
   salesRep?: string;
   status?: string;
+  columnFilters?: ParsedColumnFilters;
+  filterOptions: {
+    setters: string[];
+    salesReps: string[];
+  };
   page?: number;
   pageSize?: number;
   sort?: ProjectSortColumn;
@@ -120,30 +132,19 @@ export async function ProjectsTable({
     setter,
     salesRep,
     status,
+    columnFilters,
     sort,
     sortDir,
     userEmail,
   });
 
-  return (
-    <ProjectsListClient
-      serverPage={page}
-      serverPageSize={pageSize}
-      serverSort={sort}
-      serverSortDir={sortDir}
-      serverSearch={search}
-      serverInstaller={installer}
-      serverSetter={setter}
-      serverSalesRep={salesRep}
-      serverStatus={status}
-      total={total}
-      tableMode={projects.length > 0}
-    >
-      {projects.length === 0 ? (
+  if (projects.length === 0) {
+    return (
+      <>
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
-          <p className="text-slate-600">No projects yet.</p>
+          <p className="text-slate-600">No projects match your filters.</p>
           <p className="mt-2 text-sm text-slate-400">
-            Upload a projects sheet to get started.
+            Try adjusting search or column filters.
           </p>
           <Link
             href="/imports"
@@ -152,71 +153,89 @@ export async function ProjectsTable({
             Go to imports →
           </Link>
         </div>
-      ) : (
-        <table className="min-w-full text-sm">
+        <TableTotalNotifier total={total} />
+        <TableLoadNotifier queryKey={queryKey} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <table className="min-w-full text-sm">
             <thead className="sticky top-0 z-10 bg-white text-left text-xs text-slate-600">
               <tr>
                 {/* Identity */}
                 <TH>#</TH>
-                <SortableHeader label="Project ID" column="project_id" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="Customer" column="opportunity_name" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="Email" column="email" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="Phone" column="phone" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Project ID" column="project_id" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Customer" column="opportunity_name" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Email" column="email" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Phone" column="phone" currentSort={sort} currentDir={sortDir} />
                 {/* Address */}
-                <SortableHeader label="Address" column="address_line1" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="City" column="city" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="State" column="state_code" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="Zip" column="postal_code" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Address" column="address_line1" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="City" column="city" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="State" column="state_code" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Zip" column="postal_code" currentSort={sort} currentDir={sortDir} />
                 {/* Deal */}
-                <SortableHeader label="Stage" column="project_stage" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="Contract Date" column="contract_signed_date" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="System Size" column="system_size_kw" currentSort={sort} currentDir={sortDir} />
-                <SortableHeader label="Total Cost" column="total_system_cost" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Stage" column="project_stage" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Contract Date" column="contract_signed_date" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="System Size" column="system_size_kw" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Total Cost" column="total_system_cost" currentSort={sort} currentDir={sortDir} />
                 <TH>Calc Gross PPW</TH>
                 <TH>Calc Net PPW</TH>
                 {/* People */}
-                <SortableHeader label="Setter" column="setter_name" currentSort={sort} currentDir={sortDir} />
-                <TH>Sales Rep</TH>
+                <SortableColumnHeader
+                  label="Setter"
+                  column="setter_name"
+                  currentSort={sort}
+                  currentDir={sortDir}
+                  checkboxOptions={filterOptions.setters}
+                />
+                <ColumnHeader
+                  label="Sales Rep"
+                  filterColumnId="sales_rep"
+                  checkboxOptions={filterOptions.salesReps}
+                />
                 {/* Org */}
-                <SortableHeader label="Installer" column="installer" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Installer" column="installer" currentSort={sort} currentDir={sortDir} />
                 {/* Remittance (latest) */}
-                <TH>Pmt Date</TH>
-                <TH>Finance Type</TH>
-                <TH>Financier</TH>
-                <TH>Utility</TH>
-                <TH>PV Size</TH>
-                <TH>Redline Tier</TH>
-                <TH>Contract Amt</TH>
-                <TH>Gross PPW</TH>
-                <TH>PPW</TH>
-                <TH>Finance Fee</TH>
-                <TH>Cash Deal</TH>
-                <TH>Battery</TH>
-                <TH>Adder Amt</TH>
-                <TH>Adder Detail</TH>
-                <TH>Post-Sale WO</TH>
-                <TH>Post-Sale Adders</TH>
-                <TH>PV Only Price</TH>
-                <TH>Down Pmt</TH>
-                <TH>SPIF</TH>
-                <TH>TPO Rebate</TH>
-                <TH>ETQA</TH>
-                <TH>Enfin DCA</TH>
-                <TH>Light Reach DCA</TH>
-                <TH>Partner Comm</TH>
-                <TH>Partner Incentive</TH>
-                <TH>Re-Payment</TH>
-                <TH>C0</TH>
-                <TH>C1</TH>
-                <TH>C2</TH>
-                <TH>Adj C2</TH>
-                <TH>C0 Paid</TH>
-                <TH>C1 Paid</TH>
-                <TH>C2 Paid</TH>
-                <TH>Incentive Paid</TH>
-                <TH>Clawback</TH>
-                <TH>Others</TH>
-                <TH>Total SP Paid</TH>
+                <ColumnHeader label="Pmt Date" filterColumnId="payment_date" />
+                <ColumnHeader label="Finance Type" filterColumnId="finance_type" />
+                <ColumnHeader label="Financier" filterColumnId="financier" />
+                <ColumnHeader label="Utility" filterColumnId="utility_provider" />
+                <ColumnHeader label="PV Size" filterColumnId="pv_size" />
+                <ColumnHeader label="Redline Tier" filterColumnId="redline_price_tier" />
+                <ColumnHeader label="Contract Amt" filterColumnId="contract_amount" />
+                <ColumnHeader label="Gross PPW" filterColumnId="gross_ppw" />
+                <ColumnHeader label="PPW" filterColumnId="ppw" />
+                <ColumnHeader label="Finance Fee" filterColumnId="finance_fee" />
+                <ColumnHeader label="Cash Deal" filterColumnId="cash_deal_value" />
+                <ColumnHeader label="Battery" filterColumnId="battery_price" />
+                <ColumnHeader label="Adder Amt" filterColumnId="adder_amount" />
+                <ColumnHeader label="Adder Detail" filterColumnId="contract_adder_detail" />
+                <ColumnHeader label="Post-Sale WO" filterColumnId="post_sale_adder_work_order" />
+                <ColumnHeader label="Post-Sale Adders" filterColumnId="post_sale_adders" />
+                <ColumnHeader label="PV Only Price" filterColumnId="pv_only_price" />
+                <ColumnHeader label="Down Pmt" filterColumnId="down_payment" />
+                <ColumnHeader label="SPIF" filterColumnId="spif" />
+                <ColumnHeader label="TPO Rebate" filterColumnId="tpo_rebate" />
+                <ColumnHeader label="ETQA" filterColumnId="etqa" />
+                <ColumnHeader label="Enfin DCA" filterColumnId="enfin_dca" />
+                <ColumnHeader label="Light Reach DCA" filterColumnId="light_reach_dca" />
+                <ColumnHeader label="Partner Comm" filterColumnId="partner_commission" />
+                <ColumnHeader label="Partner Incentive" filterColumnId="partner_incentive" />
+                <ColumnHeader label="Re-Payment" filterColumnId="re_payment" />
+                <ColumnHeader label="C0" filterColumnId="c0" />
+                <ColumnHeader label="C1" filterColumnId="c1" />
+                <ColumnHeader label="C2" filterColumnId="c2" />
+                <ColumnHeader label="Adj C2" filterColumnId="adjusted_c2" />
+                <ColumnHeader label="C0 Paid" filterColumnId="c0_paid" />
+                <ColumnHeader label="C1 Paid" filterColumnId="c1_paid" />
+                <ColumnHeader label="C2 Paid" filterColumnId="c2_paid" />
+                <ColumnHeader label="Incentive Paid" filterColumnId="incentive_paid" />
+                <ColumnHeader label="Clawback" filterColumnId="clawback" />
+                <ColumnHeader label="Others" filterColumnId="others" />
+                <ColumnHeader label="Total SP Paid" filterColumnId="total_sp_paid" />
+                <ColumnHeader label="Payment Status" filterColumnId="payment_status" />
                 {isAdmin && <TH></TH>}
               </tr>
             </thead>
@@ -310,6 +329,7 @@ export async function ProjectsTable({
                   <TD><Money v={p.remittance?.clawback} /></TD>
                   <TD><Money v={p.remittance?.others} /></TD>
                   <TD><Money v={p.remittance?.total_sp_paid} /></TD>
+                  <TD><Str v={p.remittance?.payment_status} /></TD>
                   {isAdmin && (
                     <td className="whitespace-nowrap px-2 py-2">
                       <div className="flex items-center gap-1">
@@ -322,7 +342,8 @@ export async function ProjectsTable({
               ))}
             </tbody>
           </table>
-      )}
-    </ProjectsListClient>
+      <TableTotalNotifier total={total} />
+      <TableLoadNotifier queryKey={queryKey} />
+    </>
   );
 }

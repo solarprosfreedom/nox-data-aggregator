@@ -5,7 +5,7 @@
 //
 // Confirmed against the live API:
 //  - Upsert is keyed on `pid` (no duplicates created for an existing pid).
-//  - Solar records require: pid, customer_name, kw, customer_signoff,
+//  - Solar records require: pid, customer_name, system_size_kw, customer_signoff,
 //    customer_state, location_code. Everything else is optional.
 //  - Validation failures return HTTP 400 with data.errors[] strings that are
 //    prefixed "Record [i]: ..." so we can isolate the offending records.
@@ -74,7 +74,7 @@ function normalizeSale(raw: Record<string, unknown>): SequifiSale | null {
     pid,
     customer_name: typeof raw.customer_name === "string" ? raw.customer_name : null,
     customer_state: typeof raw.customer_state === "string" ? raw.customer_state : null,
-    kw: toNum(raw.kw),
+    kw: toNum(raw.system_size_kw) ?? toNum(raw.system_size) ?? toNum(raw.kw),
     gross_account_value: toNum(raw.gross_account_value),
     net_epc: toNum(raw.net_epc),
     total_commission: toNum(raw.total_commission),
@@ -132,13 +132,19 @@ export async function fetchAllSequifiSales(): Promise<SequifiSale[]> {
 export type SequifiUpsertRecord = {
   pid: string;
   customer_name: string;
-  kw: number;
+  system_size_kw: number;
   customer_signoff: string; // YYYY-MM-DD
   customer_state: string;
   location_code: string;
   gross_account_value?: number | null;
   install_partner?: string | null;
   job_status?: string | null;
+  net_epc?: number | null;
+  epc?: number | null;
+  adders?: number | null;
+  dealer_fee_amount?: number | null;
+  closer1_id?: number | null;
+  setter1_id?: number | null;
 };
 
 export type UpsertOutcome = {

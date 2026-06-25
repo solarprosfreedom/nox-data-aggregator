@@ -4,7 +4,7 @@ import { customerDisplayName, resolveStateCode } from "@/lib/data-hub/normalize"
 
 // Latest-remittance fields promoted onto each project row (prefixed in the CSV).
 const REMITTANCE_EXPORT_COLUMNS = [
-  "payment_date", "status", "sales_partner", "channel", "latest_contract",
+  "payment_date", "status", "payment_status", "sales_partner", "channel", "latest_contract",
   "contract_date", "finance_type", "financier", "utility_provider", "pv_size",
   "redline_price_tier", "contract_amount", "gross_ppw", "finance_fee",
   "cash_deal_value", "battery_price", "adder_amount", "contract_adder_detail",

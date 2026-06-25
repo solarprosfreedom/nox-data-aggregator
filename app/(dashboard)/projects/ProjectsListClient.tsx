@@ -1,111 +1,76 @@
 "use client";
 
+import ProjectsSearch from "./ProjectsSearch";
 import Pagination from "@/components/ui/Pagination";
 import {
   ProjectsPagerProvider,
   useProjectsPager,
 } from "./useProjectsPager";
+import {
+  ProjectsTableMetaProvider,
+  useProjectsTableTotal,
+} from "./ProjectsTableMeta";
 
 /** Matches the loaded table viewport so layout does not jump between loading and loaded. */
-const TABLE_PANEL_HEIGHT = "calc(100vh - 180px)";
+const TABLE_PANEL_HEIGHT = "calc(100vh - 140px)";
 
-function summaryText(total: number, search?: string) {
-  if (search) {
-    return `${total} result${total === 1 ? "" : "s"} for "${search}"`;
-  }
-  return `${total} consolidated project${total === 1 ? "" : "s"}`;
+function TableLoadingOverlay({ message }: { message: string }) {
+  return (
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/70 backdrop-blur-[1px]"
+      aria-busy="true"
+      aria-label={message}
+    >
+      <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-slate-200 border-t-cyan-600" />
+      <span className="text-sm font-medium text-slate-600">{message}</span>
+    </div>
+  );
 }
 
 export default function ProjectsListClient({
-  serverPage,
-  serverPageSize,
-  serverSort,
-  serverSortDir,
-  serverSearch,
-  serverInstaller,
-  serverSetter,
-  serverSalesRep,
-  serverStatus,
-  total,
-  tableMode,
   children,
 }: {
-  serverPage: number;
-  serverPageSize: number;
-  serverSort: string;
-  serverSortDir: string;
-  serverSearch?: string;
-  serverInstaller?: string;
-  serverSetter?: string;
-  serverSalesRep?: string;
-  serverStatus?: string;
-  total: number;
-  tableMode: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <ProjectsPagerProvider
-      serverPage={serverPage}
-      serverPageSize={serverPageSize}
-      serverSort={serverSort}
-      serverSortDir={serverSortDir}
-      serverSearch={serverSearch}
-      serverInstaller={serverInstaller}
-      serverSetter={serverSetter}
-      serverSalesRep={serverSalesRep}
-      serverStatus={serverStatus}
-    >
-      <ProjectsListBody total={total} serverSearch={serverSearch} tableMode={tableMode}>
-        {children}
-      </ProjectsListBody>
+    <ProjectsPagerProvider>
+      <ProjectsTableMetaProvider>
+        <ProjectsListBody>{children}</ProjectsListBody>
+      </ProjectsTableMetaProvider>
     </ProjectsPagerProvider>
   );
 }
 
-function ProjectsListBody({
-  total,
-  serverSearch,
-  tableMode,
-  children,
-}: {
-  total: number;
-  serverSearch?: string;
-  tableMode: boolean;
-  children: React.ReactNode;
-}) {
-  const { isNavigating } = useProjectsPager();
+function ProjectsListBody({ children }: { children: React.ReactNode }) {
+  const { isNavigating, loadingMessage } = useProjectsPager();
+  const total = useProjectsTableTotal();
 
   return (
     <>
-      {tableMode && (
-        <p className="mb-4 text-sm text-slate-500">{summaryText(total, serverSearch)}</p>
-      )}
+      <div className="mb-4">
+        <ProjectsSearch />
+      </div>
 
-      {tableMode ? (
+      <div
+        className="relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+        style={{ height: TABLE_PANEL_HEIGHT }}
+      >
         <div
-          className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-          style={{ height: TABLE_PANEL_HEIGHT }}
+          className={`min-h-0 flex-1 overflow-auto transition-opacity duration-150 ${
+            isNavigating ? "pointer-events-none opacity-40" : ""
+          }`}
         >
-          {isNavigating ? (
-            <div
-              className="flex h-full items-center justify-center bg-white"
-              aria-busy="true"
-              aria-label="Loading projects"
-            >
-              <div className="flex flex-col items-center gap-4">
-                <span className="h-14 w-14 animate-spin rounded-full border-4 border-slate-200 border-t-cyan-600" />
-                <span className="text-sm font-medium text-slate-500">Loading page…</span>
-              </div>
-            </div>
-          ) : (
-            <div className="h-full overflow-auto">{children}</div>
-          )}
+          {children}
         </div>
-      ) : (
-        children
-      )}
 
-      {total > 0 && <Pagination total={total} />}
+        {total !== null && (
+          <div className="shrink-0 border-t border-slate-200 bg-slate-50/80">
+            <Pagination total={total} />
+          </div>
+        )}
+
+        {isNavigating && <TableLoadingOverlay message={loadingMessage} />}
+      </div>
     </>
   );
 }

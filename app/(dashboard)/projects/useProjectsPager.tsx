@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { projectsTableQueryKey } from "@/lib/data-hub/projects-query-key";
 
 function readUrlState(searchParams: URLSearchParams) {
   return {
@@ -17,42 +18,7 @@ function readUrlState(searchParams: URLSearchParams) {
     pageSize: [25, 50, 100].includes(Number(searchParams.get("pageSize")))
       ? Number(searchParams.get("pageSize"))
       : 25,
-    sort: searchParams.get("sort") ?? "updated_at",
-    sortDir: searchParams.get("sortDir") ?? "desc",
-    q: searchParams.get("q") ?? "",
-    installer: searchParams.get("installer") ?? "",
-    setter: searchParams.get("setter") ?? "",
-    salesRep: searchParams.get("salesRep") ?? "",
-    status: searchParams.get("status") ?? "",
   };
-}
-
-export function projectsTableQueryKey(opts: {
-  page: number;
-  pageSize: number;
-  sort: string;
-  sortDir: string;
-  q?: string;
-  installer?: string;
-  setter?: string;
-  salesRep?: string;
-  status?: string;
-}) {
-  return [
-    opts.page,
-    opts.pageSize,
-    opts.sort,
-    opts.sortDir,
-    opts.q ?? "",
-    opts.installer ?? "",
-    opts.setter ?? "",
-    opts.salesRep ?? "",
-    opts.status ?? "",
-  ].join("|");
-}
-
-export function readProjectsUrlState(searchParams: URLSearchParams) {
-  return readUrlState(searchParams);
 }
 
 type PagerContextValue = {
@@ -60,106 +26,96 @@ type PagerContextValue = {
   displayPageSize: number;
   goToPage: (page: number) => void;
   changePageSize: (size: number) => void;
+  replaceSearchParams: (build: (params: URLSearchParams) => void) => void;
+  markTableLoaded: (queryKey: string) => void;
   isNavigating: boolean;
+  loadingMessage: string;
 };
 
 const PagerContext = createContext<PagerContextValue | null>(null);
 
 export function ProjectsPagerProvider({
-  serverPage,
-  serverPageSize,
-  serverSort,
-  serverSortDir,
-  serverSearch,
-  serverInstaller,
-  serverSetter,
-  serverSalesRep,
-  serverStatus,
   children,
 }: {
-  serverPage: number;
-  serverPageSize: number;
-  serverSort: string;
-  serverSortDir: string;
-  serverSearch?: string;
-  serverInstaller?: string;
-  serverSetter?: string;
-  serverSalesRep?: string;
-  serverStatus?: string;
   children: ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [pendingPage, setPendingPage] = useState<number | null>(null);
-  const [pendingPageSize, setPendingPageSize] = useState<number | null>(null);
+  const [pendingQueryKey, setPendingQueryKey] = useState<string | null>(null);
+  const [navKind, setNavKind] = useState<"page" | "update">("update");
 
   const url = readUrlState(searchParams);
-  const displayPage = pendingPage ?? url.page;
-  const displayPageSize = pendingPageSize ?? url.pageSize;
+  const displayPage = url.page;
+  const displayPageSize = url.pageSize;
 
-  const hrefFor = useCallback(
-    (updates: Record<string, string>) => {
+  const replaceSearchParams = useCallback(
+    (build: (params: URLSearchParams) => void, kind: "page" | "update" = "update") => {
       const params = new URLSearchParams(searchParams.toString());
-      for (const [k, v] of Object.entries(updates)) params.set(k, v);
-      return `${pathname}?${params.toString()}`;
+      build(params);
+      setNavKind(kind);
+      setPendingQueryKey(projectsTableQueryKey(params));
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [pathname, searchParams]
+    [pathname, router, searchParams]
   );
 
   const goToPage = useCallback(
     (page: number) => {
-      setPendingPage(page);
-      router.replace(hrefFor({ page: String(page) }), { scroll: false });
+      replaceSearchParams((params) => {
+        params.set("page", String(page));
+      }, "page");
     },
-    [hrefFor, router]
+    [replaceSearchParams]
   );
 
   const changePageSize = useCallback(
     (size: number) => {
-      setPendingPageSize(size);
-      setPendingPage(1);
-      router.replace(hrefFor({ pageSize: String(size), page: "1" }), { scroll: false });
+      replaceSearchParams((params) => {
+        params.set("pageSize", String(size));
+        params.set("page", "1");
+      }, "page");
     },
-    [hrefFor, router]
+    [replaceSearchParams]
   );
 
-  const serverSynced =
-    projectsTableQueryKey({
-      page: serverPage,
-      pageSize: serverPageSize,
-      sort: serverSort,
-      sortDir: serverSortDir,
-      q: serverSearch,
-      installer: serverInstaller,
-      setter: serverSetter,
-      salesRep: serverSalesRep,
-      status: serverStatus,
-    }) ===
-    projectsTableQueryKey({
-      page: displayPage,
-      pageSize: displayPageSize,
-      sort: url.sort,
-      sortDir: url.sortDir,
-      q: url.q,
-      installer: url.installer,
-      setter: url.setter,
-      salesRep: url.salesRep,
-      status: url.status,
-    });
+  const markTableLoaded = useCallback((queryKey: string) => {
+    setPendingQueryKey((pending) => (pending === queryKey ? null : pending));
+  }, []);
 
-  const isNavigating = pendingPage !== null || pendingPageSize !== null || !serverSynced;
-
+  // Safety: never leave the overlay stuck if something fails silently.
   useEffect(() => {
-    if (serverSynced) {
-      setPendingPage(null);
-      setPendingPageSize(null);
-    }
-  }, [serverSynced]);
+    if (pendingQueryKey === null) return;
+    const timer = window.setTimeout(() => setPendingQueryKey(null), 60_000);
+    return () => window.clearTimeout(timer);
+  }, [pendingQueryKey]);
+
+  const isNavigating = pendingQueryKey !== null;
+
+  const loadingMessage =
+    navKind === "page" ? "Loading page…" : "Updating results…";
 
   const value = useMemo(
-    () => ({ displayPage, displayPageSize, goToPage, changePageSize, isNavigating }),
-    [displayPage, displayPageSize, goToPage, changePageSize, isNavigating]
+    () => ({
+      displayPage,
+      displayPageSize,
+      goToPage,
+      changePageSize,
+      replaceSearchParams,
+      markTableLoaded,
+      isNavigating,
+      loadingMessage,
+    }),
+    [
+      displayPage,
+      displayPageSize,
+      goToPage,
+      changePageSize,
+      replaceSearchParams,
+      markTableLoaded,
+      isNavigating,
+      loadingMessage,
+    ]
   );
 
   return <PagerContext.Provider value={value}>{children}</PagerContext.Provider>;
@@ -170,3 +126,9 @@ export function useProjectsPager() {
   if (!ctx) throw new Error("useProjectsPager must be used within ProjectsPagerProvider");
   return ctx;
 }
+
+export function useProjectsPagerOptional() {
+  return useContext(PagerContext);
+}
+
+export { projectsTableQueryKey } from "@/lib/data-hub/projects-query-key";

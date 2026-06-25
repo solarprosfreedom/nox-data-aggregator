@@ -81,6 +81,7 @@ export function mapRemittanceRow(row: Record<string, string>, rowNumber: number)
     sales_advisor: pickField(row, "Sales Advisor") || null,
     channel: pickField(row, "Channel") || null,
     status: pickField(row, "Status") || null,
+    payment_status: pickField(row, "Payment Status") || null,
     latest_contract: pickField(row, "Latest Contract") || null,
     contract_date: parseDate(pickField(row, "Contract Date")),
     finance_type: pickField(row, "Finance Type") || null,

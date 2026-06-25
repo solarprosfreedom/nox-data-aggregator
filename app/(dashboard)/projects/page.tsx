@@ -1,59 +1,34 @@
 import Link from "next/link";
-import { ProjectsTable } from "./ProjectsTable";
-import ProjectsSearch from "./ProjectsSearch";
-import InstallerFilter from "./InstallerFilter";
-import PeopleStatusFilters from "./PeopleStatusFilters";
+import { Suspense } from "react";
+import ProjectsListClient from "./ProjectsListClient";
+import ProjectsTableSkeleton from "./ProjectsTableSkeleton";
+import { ProjectsTableSection } from "./ProjectsTableSection";
 import ExportCsvButton from "@/components/ui/ExportCsvButton";
 import SyncSettersButton from "./SyncSettersButton";
 import SequifiSyncInlineButton from "./SequifiSyncInlineButton";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { parseProjectSort } from "@/lib/data-hub/project-sort";
-import { listInstallerNames } from "@/lib/data-hub/mapping-templates";
-import { listProjectFilterValues } from "@/lib/data-hub/queries";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    q?: string;
-    installer?: string;
-    setter?: string;
-    salesRep?: string;
-    status?: string;
-    page?: string;
-    pageSize?: string;
-    sort?: string;
-    sortDir?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const {
-    q,
-    installer,
-    setter,
-    salesRep,
-    status,
-    page: pageParam,
-    pageSize: pageSizeParam,
-    sort,
-    sortDir,
-  } =
-    await searchParams;
-  const page = Math.max(1, Number(pageParam) || 1);
-  const pageSize = [25, 50, 100].includes(Number(pageSizeParam)) ? Number(pageSizeParam) : 25;
-  const { column, ascending } = parseProjectSort(sort, sortDir);
-  const installers = await listInstallerNames();
-  const filterValues = await listProjectFilterValues();
+  const params = await searchParams;
 
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
-  // Non-admins only see projects where they are the setter, closer, or sales advisor.
-  const userEmail = isAdmin ? undefined : (profile?.email ?? undefined);
+
+  const { q } = params;
   const exportParams = new URLSearchParams();
-  if (q) exportParams.set("q", q);
-  if (installer?.trim()) exportParams.set("installer", installer.trim());
-  if (setter?.trim()) exportParams.set("setter", setter.trim());
-  if (salesRep?.trim()) exportParams.set("salesRep", salesRep.trim());
-  if (status?.trim()) exportParams.set("status", status.trim());
+  if (typeof q === "string" && q) exportParams.set("q", q);
+  for (const [key, value] of Object.entries(params)) {
+    const v = Array.isArray(value) ? value[0] : value;
+    if (v && (key.startsWith("cf_") || ["installer", "setter", "salesRep", "status"].includes(key))) {
+      exportParams.set(key, v);
+    }
+  }
   const exportHref = `/api/export/projects${exportParams.toString() ? `?${exportParams}` : ""}`;
 
   return (
@@ -61,8 +36,6 @@ export default async function ProjectsPage({
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
         <div className="flex items-center gap-3">
-          <InstallerFilter installers={installers} />
-          <ProjectsSearch />
           {isAdmin && (
             <>
               <SyncSettersButton />
@@ -79,27 +52,11 @@ export default async function ProjectsPage({
         </div>
       </div>
 
-      <div className="mb-8 mt-1 border-t border-slate-200 pt-6">
-        <PeopleStatusFilters
-          setters={filterValues.setters}
-          salesReps={filterValues.salesReps}
-          statuses={filterValues.statuses}
-        />
-      </div>
-
-      <ProjectsTable
-        search={q}
-        installer={installer}
-        setter={setter}
-        salesRep={salesRep}
-        status={status}
-        page={page}
-        pageSize={pageSize}
-        sort={column}
-        sortDir={ascending ? "asc" : "desc"}
-        userEmail={userEmail}
-        isAdmin={isAdmin}
-      />
+      <ProjectsListClient>
+        <Suspense fallback={<ProjectsTableSkeleton />}>
+          <ProjectsTableSection params={params} />
+        </Suspense>
+      </ProjectsListClient>
     </div>
   );
 }

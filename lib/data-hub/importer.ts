@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ImportSource } from "@/lib/data-hub/normalize";
 import { mapProjectsSheetRow, mapRemittanceRow } from "@/lib/data-hub/mappers";
+import { refreshNetEpcForProjects } from "@/lib/data-hub/remittance-project-sync";
 import { parseCsv, rowsToRecords } from "@/lib/csv/parse";
 
 export type ImportResult = {
@@ -100,6 +101,7 @@ export async function processImport(options: {
       }
     } else {
       // remittance
+      const affectedProjectIds = new Set<string>();
       for (let i = 0; i < rows.length; i++) {
         const mapped = mapRemittanceRow(rows[i]!, i + 2);
         if (!mapped) {
@@ -114,7 +116,10 @@ export async function processImport(options: {
           .eq("project_id", mapped.hes_code)
           .maybeSingle();
 
-        if (project?.id) matched++;
+        if (project?.id) {
+          matched++;
+          affectedProjectIds.add(project.id);
+        }
 
         const remittanceRow = {
           ...mapped,
@@ -133,6 +138,10 @@ export async function processImport(options: {
         }
 
         inserted++;
+      }
+
+      if (affectedProjectIds.size > 0) {
+        await refreshNetEpcForProjects(db, [...affectedProjectIds]);
       }
     }
 

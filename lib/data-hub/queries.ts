@@ -1,7 +1,20 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
 import {
   parseProjectSort,
 } from "@/lib/data-hub/project-sort";
+import {
+  ALL_COLUMN_FILTER_DEFS,
+  applyProjectColumnFilter,
+  applySalesRepFilter,
+  applySalesRepMultiSelectFilter,
+  applySetterMultiSelectFilter,
+  isColumnFilterActive,
+  projectIdsMatchingRemittanceFilters,
+  type ColumnFilterMap,
+  type MultiSelectColumnFilterMap,
+  type ParsedColumnFilters,
+} from "@/lib/data-hub/column-filters";
 
 export type Project = {
   id: string;
@@ -34,6 +47,7 @@ export type Project = {
   installer: string | null;
   terros_account_id: string | null;
   sequifi_sale_id: string | null;
+  net_epc: number | null;
   updated_at: string;
 };
 
@@ -41,6 +55,7 @@ export type Project = {
 export type RemittanceSummary = {
   payment_date: string | null;
   status: string | null;
+  payment_status: string | null;
   sales_partner: string | null;
   channel: string | null;
   latest_contract: string | null;
@@ -95,7 +110,7 @@ export type ProjectFilterValues = {
 };
 
 const REMITTANCE_MERGE_COLUMNS =
-  "project_id, payment_date, status, sales_partner, channel, latest_contract, contract_date, finance_type, financier, utility_provider, pv_size, redline_price_tier, contract_amount, gross_ppw, finance_fee, cash_deal_value, battery_price, adder_amount, contract_adder_detail, post_sale_adder_work_order, post_sale_adders, pv_only_price, ppw, down_payment, spif, tpo_rebate, etqa, enfin_dca, light_reach_dca, partner_commission, partner_incentive, re_payment, c0, c1, c2, adjusted_c2, c0_paid, c1_paid, c2_paid, incentive_paid, clawback, others, total_sp_paid, payment_this_week";
+  "project_id, payment_date, status, payment_status, sales_partner, channel, latest_contract, contract_date, finance_type, financier, utility_provider, pv_size, redline_price_tier, contract_amount, gross_ppw, finance_fee, cash_deal_value, battery_price, adder_amount, contract_adder_detail, post_sale_adder_work_order, post_sale_adders, pv_only_price, ppw, down_payment, spif, tpo_rebate, etqa, enfin_dca, light_reach_dca, partner_commission, partner_incentive, re_payment, c0, c1, c2, adjusted_c2, c0_paid, c1_paid, c2_paid, incentive_paid, clawback, others, total_sp_paid, payment_this_week";
 
 // Attaches the latest remittance row (by payment_date) to each project.
 async function attachRemittance(
@@ -175,66 +190,123 @@ export async function listProjectsPaged(opts: {
   setter?: string;
   salesRep?: string;
   status?: string;
+  columnFilters?: ParsedColumnFilters;
   sort?: string;
   sortDir?: string;
-  userEmail?: string; // when set, filters to projects where setter_email or closer_email matches
+  userEmail?: string;
 }): Promise<{ rows: ProjectWithRemittance[]; total: number }> {
   const db = createServerSupabase();
   const page = Math.max(1, opts.page);
   const from = (page - 1) * opts.pageSize;
   const to = from + opts.pageSize - 1;
   const { column, ascending } = parseProjectSort(opts.sort, opts.sortDir);
+  const columnFilters = opts.columnFilters ?? { advanced: {}, multiSelect: {} };
+  const { advanced, multiSelect } = columnFilters;
 
-  let query = db
-    .from("projects")
-    .select("*", { count: "exact" })
-    .order(column, { ascending })
-    .range(from, to);
+  const remittanceProjectIds = await projectIdsMatchingRemittanceFilters(
+    db,
+    advanced,
+    ALL_COLUMN_FILTER_DEFS
+  );
 
-  // Non-admin users only see their own projects (setter or closer).
-  if (opts.userEmail) {
-    query = query.or(
-      `setter_email.ilike.${opts.userEmail},closer_email.ilike.${opts.userEmail},sales_advisor_email.ilike.${opts.userEmail}`
-    );
+  if (remittanceProjectIds && remittanceProjectIds.size === 0) {
+    return { rows: [], total: 0 };
   }
 
-  if (opts.search) {
-    query = query.or(
-      `project_id.ilike.%${opts.search}%,opportunity_name.ilike.%${opts.search}%,email.ilike.%${opts.search}%,phone.ilike.%${opts.search}%`
-    );
-  }
+  const applyFilters = <Q extends { eq: Function; or: Function; ilike: Function; in: Function }>(
+    query: Q
+  ): Q => {
+    let q = query;
 
-  if (opts.installer?.trim()) {
-    query = query.eq("installer", opts.installer.trim());
-  }
+    if (remittanceProjectIds) {
+      q = q.in("id", [...remittanceProjectIds]) as Q;
+    }
 
-  if (opts.setter?.trim()) {
-    query = query.ilike("setter_name", `%${opts.setter.trim()}%`);
-  }
+    if (opts.userEmail) {
+      q = q.or(
+        `setter_email.ilike.${opts.userEmail},closer_email.ilike.${opts.userEmail},sales_advisor_email.ilike.${opts.userEmail}`
+      ) as Q;
+    }
 
-  if (opts.salesRep?.trim()) {
-    const value = opts.salesRep.trim();
-    query = query.or(
-      `closer_name.ilike.%${value}%,sales_advisor_name.ilike.%${value}%,setter_name.ilike.%${value}%`
-    );
-  }
+    if (opts.search) {
+      q = q.or(
+        `project_id.ilike.%${opts.search}%,opportunity_name.ilike.%${opts.search}%,email.ilike.%${opts.search}%,phone.ilike.%${opts.search}%`
+      ) as Q;
+    }
 
-  if (opts.status?.trim()) {
-    query = query.ilike("project_stage", `%${opts.status.trim()}%`);
-  }
+    if (opts.installer?.trim() && !advanced.installer) {
+      q = q.eq("installer", opts.installer.trim()) as Q;
+    }
+    if (opts.setter?.trim() && !multiSelect.setter_name?.length && !advanced.setter_name) {
+      q = q.ilike("setter_name", `%${opts.setter.trim()}%`) as Q;
+    }
+    if (
+      opts.salesRep?.trim() &&
+      !multiSelect.sales_rep?.length &&
+      !advanced.sales_rep
+    ) {
+      const value = opts.salesRep.trim();
+      q = q.or(
+        `closer_name.ilike.%${value}%,sales_advisor_name.ilike.%${value}%,setter_name.ilike.%${value}%`
+      ) as Q;
+    }
+    if (opts.status?.trim() && !advanced.project_stage) {
+      q = q.ilike("project_stage", `%${opts.status.trim()}%`) as Q;
+    }
 
-  const { data, error, count } = await query;
+    if (multiSelect.setter_name?.length) {
+      q = applySetterMultiSelectFilter(q as never, multiSelect.setter_name) as Q;
+    }
+    if (multiSelect.sales_rep?.length) {
+      q = applySalesRepMultiSelectFilter(q as never, multiSelect.sales_rep) as Q;
+    }
+
+    for (const def of ALL_COLUMN_FILTER_DEFS) {
+      if (def.id === "setter_name" && multiSelect.setter_name?.length) continue;
+      if (def.id === "sales_rep" && multiSelect.sales_rep?.length) continue;
+      const filter = advanced[def.id];
+      if (!filter || !isColumnFilterActive(filter)) continue;
+      if (def.source === "projects" && def.dbColumn) {
+        q = applyProjectColumnFilter(q as never, def.dbColumn, filter) as Q;
+      } else if (def.source === "sales_rep") {
+        q = applySalesRepFilter(q as never, filter) as Q;
+      }
+    }
+
+    return q;
+  };
+
+  const dataQuery = applyFilters(
+    db
+      .from("projects")
+      .select("*")
+      .order(column, { ascending })
+      .range(from, to)
+  );
+
+  const countQuery = applyFilters(
+    db.from("projects").select("id", { count: "exact", head: true })
+  );
+
+  const [{ data, error }, { count, error: countError }] = await Promise.all([
+    dataQuery,
+    countQuery,
+  ]);
 
   if (error) {
     if (error.message.includes("projects")) return { rows: [], total: 0 };
     throw new Error(error.message);
+  }
+  if (countError) {
+    if (countError.message.includes("projects")) return { rows: [], total: 0 };
+    throw new Error(countError.message);
   }
 
   const rows = await attachRemittance(db, (data ?? []) as Project[]);
   return { rows, total: count ?? 0 };
 }
 
-export async function listProjectFilterValues(): Promise<ProjectFilterValues> {
+async function fetchProjectFilterValues(): Promise<ProjectFilterValues> {
   const db = createServerSupabase();
   const { data, error } = await db
     .from("projects")
@@ -270,6 +342,13 @@ export async function listProjectFilterValues(): Promise<ProjectFilterValues> {
     statuses: [...statuses].sort((a, b) => a.localeCompare(b)),
   };
 }
+
+/** Filter dropdown options change rarely — avoid re-scanning all projects on every sort/filter. */
+export const listProjectFilterValues = unstable_cache(
+  fetchProjectFilterValues,
+  ["project-filter-values"],
+  { revalidate: 300 }
+);
 
 export async function getProject(id: string) {
   const db = createServerSupabase();

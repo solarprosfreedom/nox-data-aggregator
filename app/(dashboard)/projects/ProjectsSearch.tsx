@@ -1,12 +1,12 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { useProjectsPager } from "@/app/(dashboard)/projects/useProjectsPager";
 
 export default function ProjectsSearch() {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { replaceSearchParams } = useProjectsPager();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -19,11 +19,11 @@ export default function ProjectsSearch() {
     const val = e.target.value;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (val) params.set("q", val);
-      else params.delete("q");
-      params.delete("page");
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      replaceSearchParams((params) => {
+        if (val) params.set("q", val);
+        else params.delete("q");
+        params.delete("page");
+      });
     }, 350);
   }
 
@@ -34,10 +34,10 @@ export default function ProjectsSearch() {
         defaultValue={searchParams.get("q") ?? ""}
         onChange={onInput}
         placeholder="Search by name, ID, email, phone…"
-        className="w-72 rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+        className="h-10 w-80 rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
       />
       <svg
-        className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400"
+        className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
