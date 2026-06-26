@@ -70,7 +70,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
   const { data: remittanceRows, error: remittanceErr } = await db
     .from("remittance")
     .select(
-      "payment_date, payment_this_week, total_sp_paid, status, customer_name, sales_advisor, sales_partner, contract_date, pv_size, contract_amount, battery_price, adder_amount",
+      "payment_date, payment_this_week, total_sp_paid, status, customer_name, sales_advisor, sales_partner, contract_date, pv_size, contract_amount, battery_price, adder_amount, imported_at",
     )
     .eq("project_id", id)
     .order("imported_at", { ascending: false })
