@@ -161,6 +161,7 @@ export async function processImport(options: {
         }
       }
 
+      const importedAt = new Date().toISOString();
       const remittanceRows = pendingRows.map(({ csvRowNumber, mapped }) => {
         const projectId = projectIdByHes.get(mapped.hes_code) ?? null;
         if (projectId) {
@@ -172,6 +173,7 @@ export async function processImport(options: {
           project_id: projectId,
           file_name: fileName,
           file_hash: fileHash,
+          imported_at: importedAt,
           _csvRowNumber: csvRowNumber,
         };
       });

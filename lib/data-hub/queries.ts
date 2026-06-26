@@ -113,7 +113,7 @@ export type ProjectFilterValues = {
 const REMITTANCE_MERGE_COLUMNS =
   "id, project_id, payment_date, status, payment_status, sales_partner, channel, latest_contract, contract_date, finance_type, financier, utility_provider, pv_size, redline_price_tier, contract_amount, gross_ppw, finance_fee, cash_deal_value, battery_price, adder_amount, contract_adder_detail, post_sale_adder_work_order, post_sale_adders, pv_only_price, ppw, down_payment, spif, tpo_rebate, etqa, enfin_dca, light_reach_dca, partner_commission, partner_incentive, re_payment, c0, c1, c2, adjusted_c2, c0_paid, c1_paid, c2_paid, incentive_paid, clawback, others, total_sp_paid, payment_this_week";
 
-// Attaches the latest remittance row (by payment_date) to each project.
+// Attaches the latest remittance row (by imported_at) to each project.
 async function attachRemittance(
   db: ReturnType<typeof createServerSupabase>,
   rows: Project[]
@@ -142,7 +142,7 @@ async function attachRemittance(
     .from("remittance")
     .select(REMITTANCE_MERGE_COLUMNS)
     .in("project_id", ids)
-    .order("payment_date", { ascending: false });
+    .order("imported_at", { ascending: false });
 
   if (error) {
     return rows.map((r) => ({ ...r, remittance: null }));

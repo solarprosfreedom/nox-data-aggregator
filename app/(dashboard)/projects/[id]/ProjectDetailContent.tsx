@@ -71,7 +71,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
     .from("remittance")
     .select("payment_date, payment_this_week, total_sp_paid, status, battery_price, adder_amount")
     .eq("project_id", id)
-    .order("payment_date", { ascending: false })
+    .order("imported_at", { ascending: false })
     .limit(10);
 
   const remittance =

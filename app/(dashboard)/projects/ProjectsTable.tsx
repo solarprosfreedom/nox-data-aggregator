@@ -68,7 +68,7 @@ function systemSizeWatts(kw: number | null | undefined) {
   return <>{Math.round(n * 1000).toLocaleString("en-US")} W</>;
 }
 
-/** Latest remittance status wins over project stage when present. */
+/** Latest remittance import wins over project stage when present. */
 function projectStage(
   projectStageVal: string | null | undefined,
   remitStatus: string | null | undefined

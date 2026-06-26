@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     from += pageSize;
   }
 
-  // Attach each project's latest remittance row (by payment_date).
+  // Attach each project's latest remittance row (by imported_at).
   const ids = projects.map((p) => p.id as string);
   const latestRemit = new Map<string, Record<string, unknown>>();
   if (ids.length) {
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         .from("remittance")
         .select(`project_id, ${REMITTANCE_EXPORT_COLUMNS.join(", ")}`)
         .in("project_id", chunk)
-        .order("payment_date", { ascending: false });
+        .order("imported_at", { ascending: false });
       for (const row of (remitData ?? []) as unknown as Record<string, unknown>[]) {
         const pid = row.project_id as string | null;
         if (pid && !latestRemit.has(pid)) latestRemit.set(pid, row);

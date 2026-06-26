@@ -402,7 +402,7 @@ export async function projectIdsMatchingRemittanceFilters(
       .from("remittance")
       .select(uniqueCols.join(", "))
       .not("project_id", "is", null)
-      .order("payment_date", { ascending: false })
+      .order("imported_at", { ascending: false })
       .range(from, from + pageSize - 1);
 
     if (error) throw new Error(error.message);
