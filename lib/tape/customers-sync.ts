@@ -2,7 +2,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 const TAPE_API_BASE = "https://api.tapeapp.com";
 const PAGE_LIMIT = 50;
-const UPSERT_CHUNK_SIZE = 100;
+const UPSERT_CHUNK_SIZE = 10;
 
 type TapeField = {
   external_id?: string;

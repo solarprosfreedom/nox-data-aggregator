@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCronAuthorized, shouldExecuteCron } from "@/lib/cron/authorize";
 import { runHubSpotIllumSync } from "@/lib/hubspot/illum-sync";
 
-function isAuthorized(request: NextRequest): boolean {
-  const expected = process.env.CRON_SECRET?.trim();
-  if (!expected) return true;
+export async function GET(request: NextRequest) {
+  if (!shouldExecuteCron(request)) {
+    return NextResponse.json({
+      ok: true,
+      path: "/api/cron/hubspot-illum-sync",
+      schedule: "*/15 * * * *",
+    });
+  }
 
-  const fromBearer = request.headers
-    .get("authorization")
-    ?.replace(/^Bearer\s+/i, "")
-    .trim();
-  const fromHeader = request.headers.get("x-cron-secret")?.trim();
-  return fromBearer === expected || fromHeader === expected;
-}
+  const fullRefresh = request.nextUrl.searchParams.get("full_refresh") === "1";
 
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    path: "/api/cron/hubspot-illum-sync",
-    schedule: "*/15 * * * *",
-    note: "POST to execute sync",
-  });
+  try {
+    const result = await runHubSpotIllumSync({ fullRefresh });
+    return NextResponse.json({ ok: true, full_refresh: fullRefresh, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "HubSpot sync failed";
+    const stack = err instanceof Error ? err.stack?.split("\n").slice(0, 5).join(" | ") : undefined;
+    return NextResponse.json({ error: message, stack }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,11 +32,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await runHubSpotIllumSync({ fullRefresh });
-    return NextResponse.json({
-      ok: true,
-      full_refresh: fullRefresh,
-      ...result,
-    });
+    return NextResponse.json({ ok: true, full_refresh: fullRefresh, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "HubSpot sync failed";
     const stack = err instanceof Error ? err.stack?.split("\n").slice(0, 5).join(" | ") : undefined;
