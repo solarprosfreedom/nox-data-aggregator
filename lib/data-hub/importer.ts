@@ -3,8 +3,12 @@ import type { ImportSource } from "@/lib/data-hub/normalize";
 import { mapProjectsSheetRow, mapRemittanceRow } from "@/lib/data-hub/mappers";
 import {
   refreshNetEpcForProjects,
-  syncProjectsFromRemittanceImport,
 } from "@/lib/data-hub/remittance-project-sync";
+import {
+  mapProjectPersonalInfoFromRow,
+  syncProjectPersonalInfoFromImport,
+  type ProjectPersonalInfoSync,
+} from "@/lib/data-hub/project-personal-sync";
 import { omitEmptyPatchFields, remittanceUpsertPayload } from "@/lib/data-hub/remittance-upsert";
 import {
   findHeaderRowIndex,
@@ -164,11 +168,7 @@ export async function processImport(options: {
       }
 
       const importedAt = new Date().toISOString();
-      const projectSyncUpdates: {
-        projectId: string;
-        stage?: string;
-        customerName?: string;
-      }[] = [];
+      const projectSyncUpdates: ProjectPersonalInfoSync[] = [];
       const linkedProjectIds = [
         ...new Set(
           pendingRows
@@ -195,13 +195,13 @@ export async function processImport(options: {
 
       for (const { csvRowNumber, mapped } of pendingRows) {
         const projectId = projectIdByHes.get(mapped.hes_code) ?? null;
+        const rawRow = mapped.raw_row as Record<string, string>;
         if (projectId) {
           matched++;
           affectedProjectIds.add(projectId);
           projectSyncUpdates.push({
             projectId,
-            stage: mapped.status?.trim() || undefined,
-            customerName: mapped.customer_name?.trim() || undefined,
+            ...mapProjectPersonalInfoFromRow(rawRow),
           });
         }
 
@@ -242,7 +242,7 @@ export async function processImport(options: {
       }
 
       if (affectedProjectIds.size > 0) {
-        await syncProjectsFromRemittanceImport(db, projectSyncUpdates);
+        await syncProjectPersonalInfoFromImport(db, projectSyncUpdates);
         await refreshNetEpcForProjects(db, [...affectedProjectIds]);
       }
     }

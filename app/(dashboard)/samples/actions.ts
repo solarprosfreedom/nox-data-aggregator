@@ -13,6 +13,11 @@ import {
   type SchemaType,
 } from "@/lib/data-hub/field-mapper";
 import type { MappingTemplate } from "@/lib/data-hub/mapping-templates";
+import {
+  projectPersonalInfoFromImportPatches,
+  syncProjectPersonalInfoFromImport,
+  type ProjectPersonalInfoSync,
+} from "@/lib/data-hub/project-personal-sync";
 
 export type UploadSampleResult =
   | { ok: true; id: string; rowCount: number; columnCount: number }
@@ -132,11 +137,7 @@ export async function importWithMapping(
   let remittanceUpdated = 0;
   const errorMessages: string[] = [];
   const affectedProjectIds = new Set<string>();
-  const projectSyncUpdates: {
-    projectId: string;
-    stage?: string;
-    customerName?: string;
-  }[] = [];
+  const projectSyncUpdates: ProjectPersonalInfoSync[] = [];
   const importFileHash = `${String(fileName ?? "manual")}-${Date.now()}`;
 
   for (let i = 0; i < rows.length; i++) {
@@ -229,13 +230,9 @@ export async function importWithMapping(
           remittanceUpdated++;
           affectedProjectIds.add(projectUuid);
         }
-        const remStatus = remittancePatch.status as string | undefined;
-        const remCustomer = remittancePatch.customer_name as string | undefined;
-        const projectCustomer = projectPatch.opportunity_name as string | undefined;
         projectSyncUpdates.push({
           projectId: projectUuid,
-          stage: remStatus?.trim() || undefined,
-          customerName: (remCustomer || projectCustomer)?.trim() || undefined,
+          ...projectPersonalInfoFromImportPatches(projectPatch, remittancePatch),
         });
       } else {
         const { error } = await db.from("remittance").insert({
@@ -254,23 +251,16 @@ export async function importWithMapping(
           remittanceInserted++;
           affectedProjectIds.add(projectUuid);
         }
-        const remStatus = remittancePatch.status as string | undefined;
-        const remCustomer = remittancePatch.customer_name as string | undefined;
-        const projectCustomer = projectPatch.opportunity_name as string | undefined;
         projectSyncUpdates.push({
           projectId: projectUuid,
-          stage: remStatus?.trim() || undefined,
-          customerName: (remCustomer || projectCustomer)?.trim() || undefined,
+          ...projectPersonalInfoFromImportPatches(projectPatch, remittancePatch),
         });
       }
     }
   }
 
   if (projectSyncUpdates.length > 0) {
-    const { syncProjectsFromRemittanceImport } = await import(
-      "@/lib/data-hub/remittance-project-sync"
-    );
-    await syncProjectsFromRemittanceImport(db, projectSyncUpdates);
+    await syncProjectPersonalInfoFromImport(db, projectSyncUpdates);
   }
 
   if (affectedProjectIds.size > 0) {

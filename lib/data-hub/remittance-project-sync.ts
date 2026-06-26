@@ -110,42 +110,22 @@ export async function refreshNetEpcForProjects(
   return { scanned, updated, skipped };
 }
 
-/** Push remittance Status / Customer Name onto linked projects. */
+/** @deprecated Use syncProjectPersonalInfoFromImport from project-personal-sync */
 export async function syncProjectsFromRemittanceImport(
   db: SupabaseClient,
   updates: { projectId: string; stage?: string; customerName?: string }[],
 ): Promise<number> {
-  const byProject = new Map<string, { stage?: string; customerName?: string }>();
-
-  for (const { projectId, stage, customerName } of updates) {
-    if (!projectId) continue;
-    const entry = byProject.get(projectId) ?? {};
-    const trimmedStage = stage?.trim();
-    const trimmedName = customerName?.trim();
-    if (trimmedStage) entry.stage = trimmedStage;
-    if (trimmedName) entry.customerName = trimmedName;
-    byProject.set(projectId, entry);
-  }
-
-  if (byProject.size === 0) return 0;
-
-  const now = new Date().toISOString();
-  let updated = 0;
-
-  for (const [projectId, fields] of byProject) {
-    const patch: { updated_at: string; project_stage?: string; opportunity_name?: string } = {
-      updated_at: now,
-    };
-    if (fields.stage) patch.project_stage = fields.stage;
-    if (fields.customerName) patch.opportunity_name = fields.customerName;
-    if (!fields.stage && !fields.customerName) continue;
-
-    const { error } = await db.from("projects").update(patch).eq("id", projectId);
-    if (error) throw new Error(error.message);
-    updated += 1;
-  }
-
-  return updated;
+  const { syncProjectPersonalInfoFromImport } = await import(
+    "@/lib/data-hub/project-personal-sync"
+  );
+  return syncProjectPersonalInfoFromImport(
+    db,
+    updates.map(({ projectId, stage, customerName }) => ({
+      projectId,
+      project_stage: stage,
+      opportunity_name: customerName,
+    })),
+  );
 }
 
 /** @deprecated Use syncProjectsFromRemittanceImport */
