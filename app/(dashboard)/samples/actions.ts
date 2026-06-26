@@ -132,6 +132,7 @@ export async function importWithMapping(
   let remittanceUpdated = 0;
   const errorMessages: string[] = [];
   const affectedProjectIds = new Set<string>();
+  const stageUpdates: { projectId: string; stage: string }[] = [];
   const importFileHash = `${String(fileName ?? "manual")}-${Date.now()}`;
 
   for (let i = 0; i < rows.length; i++) {
@@ -224,6 +225,10 @@ export async function importWithMapping(
           remittanceUpdated++;
           affectedProjectIds.add(projectUuid);
         }
+        const remStatus = remittancePatch.status as string | undefined;
+        if (remStatus?.trim()) {
+          stageUpdates.push({ projectId: projectUuid, stage: remStatus.trim() });
+        }
       } else {
         const { error } = await db.from("remittance").insert({
           ...remittancePatch,
@@ -241,8 +246,19 @@ export async function importWithMapping(
           remittanceInserted++;
           affectedProjectIds.add(projectUuid);
         }
+        const remStatus = remittancePatch.status as string | undefined;
+        if (remStatus?.trim()) {
+          stageUpdates.push({ projectId: projectUuid, stage: remStatus.trim() });
+        }
       }
     }
+  }
+
+  if (stageUpdates.length > 0) {
+    const { syncProjectStagesFromRemittance } = await import(
+      "@/lib/data-hub/remittance-project-sync"
+    );
+    await syncProjectStagesFromRemittance(db, stageUpdates);
   }
 
   if (affectedProjectIds.size > 0) {

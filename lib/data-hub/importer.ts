@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ImportSource } from "@/lib/data-hub/normalize";
 import { mapProjectsSheetRow, mapRemittanceRow } from "@/lib/data-hub/mappers";
-import { refreshNetEpcForProjects } from "@/lib/data-hub/remittance-project-sync";
+import {
+  refreshNetEpcForProjects,
+  syncProjectStagesFromRemittance,
+} from "@/lib/data-hub/remittance-project-sync";
+import { omitEmptyPatchFields, remittanceUpsertPayload } from "@/lib/data-hub/remittance-upsert";
 import {
   findHeaderRowIndex,
   inferRemittancePaymentDate,
@@ -19,7 +23,6 @@ export type ImportResult = {
   errorMessages: string[];
 };
 
-const REMITTANCE_UPSERT_CHUNK = 100;
 const PROJECT_LOOKUP_CHUNK = 200;
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -51,13 +54,12 @@ export async function processImport(options: {
   let updated = 0;
   let matched = 0;
 
-  // Remove any previous failed/partial log for this file so retries work.
+  // Allow re-import of the same file (updates remittance rows in place).
   await db
     .from("hub_import_log")
     .delete()
     .eq("source", source)
-    .eq("file_hash", fileHash)
-    .in("status", ["failed", "partial"]);
+    .eq("file_hash", fileHash);
 
   const { data: logRow, error: logErr } = await db
     .from("hub_import_log")
@@ -73,11 +75,6 @@ export async function processImport(options: {
     .single();
 
   if (logErr) {
-    if (logErr.code === "23505") {
-      throw new Error(
-        "This file was already successfully imported. Re-export a fresh copy to re-import."
-      );
-    }
     throw new Error(logErr.message);
   }
 
@@ -109,9 +106,14 @@ export async function processImport(options: {
           .maybeSingle();
 
         if (existing) {
+          const { project_id: _pid, ...rest } = mapped;
+          const projectUpdate = omitEmptyPatchFields(rest);
+          if (Object.keys(projectUpdate).length === 0) continue;
+
+          projectUpdate.updated_at = new Date().toISOString();
           const { error } = await db
             .from("projects")
-            .update(mapped)
+            .update(projectUpdate)
             .eq("id", existing.id);
           if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
           else updated++;
@@ -162,39 +164,79 @@ export async function processImport(options: {
       }
 
       const importedAt = new Date().toISOString();
-      const remittanceRows = pendingRows.map(({ csvRowNumber, mapped }) => {
+      const stageUpdates: { projectId: string; stage: string }[] = [];
+      const linkedProjectIds = [
+        ...new Set(
+          pendingRows
+            .map((r) => projectIdByHes.get(r.mapped.hes_code))
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+
+      const latestRemitIdByProject = new Map<string, string | number>();
+      for (const idChunk of chunk(linkedProjectIds, PROJECT_LOOKUP_CHUNK)) {
+        const { data: latestRows, error: latestErr } = await db.rpc(
+          "latest_remittance_for_projects",
+          { project_ids: idChunk },
+        );
+        if (latestErr) {
+          throw new Error(`Remittance lookup failed: ${latestErr.message}`);
+        }
+        for (const row of (latestRows ?? []) as { id?: string | number; project_id?: string }[]) {
+          if (row.project_id && row.id != null) {
+            latestRemitIdByProject.set(row.project_id, row.id);
+          }
+        }
+      }
+
+      for (const { csvRowNumber, mapped } of pendingRows) {
         const projectId = projectIdByHes.get(mapped.hes_code) ?? null;
         if (projectId) {
           matched++;
           affectedProjectIds.add(projectId);
+          if (mapped.status?.trim()) {
+            stageUpdates.push({ projectId, stage: mapped.status.trim() });
+          }
         }
-        return {
+
+        const patch = remittanceUpsertPayload({
           ...mapped,
           project_id: projectId,
           file_name: fileName,
           file_hash: fileHash,
           imported_at: importedAt,
-          _csvRowNumber: csvRowNumber,
-        };
-      });
-
-      for (const rowChunk of chunk(remittanceRows, REMITTANCE_UPSERT_CHUNK)) {
-        const payload = rowChunk.map(({ _csvRowNumber: _, ...row }) => row);
-        const { error } = await db.from("remittance").upsert(payload, {
-          onConflict: "file_hash,row_number",
         });
 
-        if (error) {
-          for (const row of rowChunk) {
-            errorMessages.push(`Row ${row._csvRowNumber}: ${error.message}`);
+        const latestRemitId = projectId
+          ? latestRemitIdByProject.get(projectId)
+          : undefined;
+
+        if (latestRemitId != null) {
+          const { error } = await db
+            .from("remittance")
+            .update(patch)
+            .eq("id", latestRemitId);
+          if (error) {
+            errorMessages.push(`Row ${csvRowNumber}: ${error.message}`);
+            continue;
           }
+          updated++;
           continue;
         }
 
-        inserted += rowChunk.length;
+        const { error } = await db.from("remittance").insert({
+          ...patch,
+          row_number: csvRowNumber,
+        });
+        if (error) {
+          errorMessages.push(`Row ${csvRowNumber}: ${error.message}`);
+          continue;
+        }
+        inserted++;
       }
 
       if (affectedProjectIds.size > 0) {
+        await syncProjectStagesFromRemittance(db, stageUpdates);
         await refreshNetEpcForProjects(db, [...affectedProjectIds]);
       }
     }

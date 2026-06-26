@@ -110,6 +110,35 @@ export async function refreshNetEpcForProjects(
   return { scanned, updated, skipped };
 }
 
+/** Push remittance Status into projects.project_stage for linked projects. */
+export async function syncProjectStagesFromRemittance(
+  db: SupabaseClient,
+  updates: { projectId: string; stage: string }[],
+): Promise<number> {
+  const byProject = new Map<string, string>();
+  for (const { projectId, stage } of updates) {
+    const trimmed = stage.trim();
+    if (projectId && trimmed) byProject.set(projectId, trimmed);
+  }
+
+  if (byProject.size === 0) return 0;
+
+  const now = new Date().toISOString();
+  let updated = 0;
+
+  for (const [projectId, stage] of byProject) {
+    const { error } = await db
+      .from("projects")
+      .update({ project_stage: stage, updated_at: now })
+      .eq("id", projectId);
+
+    if (error) throw new Error(error.message);
+    updated += 1;
+  }
+
+  return updated;
+}
+
 /** Backfill net_epc for every project that has at least one remittance row. */
 export async function refreshAllProjectNetEpcFromRemittance(
   db: SupabaseClient,
