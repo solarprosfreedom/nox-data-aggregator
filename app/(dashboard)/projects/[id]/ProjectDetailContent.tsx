@@ -3,6 +3,7 @@ import { getProject } from "@/lib/data-hub/queries";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { computeGrossPpw, computeNetPpw, formatPpw } from "@/lib/data-hub/ppw";
 import { resolveProjectDisplay } from "@/lib/data-hub/project-field-resolution";
+import SystemSizeDisplay from "@/components/ui/SystemSizeDisplay";
 
 function Section({
   title,
@@ -39,13 +40,6 @@ function formatUsPhone(value: unknown): string {
     digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
   if (normalized.length !== 10) return raw;
   return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6)}`;
-}
-
-function systemSizeWatts(kw: unknown): string | null {
-  if (kw == null) return null;
-  const n = Number(kw);
-  if (isNaN(n)) return null;
-  return `${Math.round(n * 1000).toLocaleString("en-US")} W`;
 }
 
 function MoneyField({ label, value }: { label: string; value: unknown }) {
@@ -131,7 +125,12 @@ export async function ProjectDetailContent({ id }: { id: string }) {
           <Field label="Advisor email" value={p.sales_advisor_email} />
         </Section>
         <Section title="System">
-          <Field label="System size" value={systemSizeWatts(resolved.systemSizeKw)} />
+          <div>
+            <dt className="text-xs text-slate-400">System size</dt>
+            <dd className="text-sm text-slate-900">
+              <SystemSizeDisplay kw={resolved.systemSizeKw} />
+            </dd>
+          </div>
           <MoneyField label="Total cost" value={resolved.totalCost} />
           <Field label="Gross PPW (calc)" value={formatPpw(grossPpw)} />
           <Field label="Net PPW (calc)" value={formatPpw(netPpw)} />

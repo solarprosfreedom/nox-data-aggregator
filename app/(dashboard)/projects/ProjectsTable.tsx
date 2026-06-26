@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { listProjectsPaged } from "@/lib/data-hub/queries";
 import SortableColumnHeader from "@/components/ui/SortableColumnHeader";
+import SystemSizeColumnHeader from "@/components/ui/SystemSizeColumnHeader";
+import SystemSizeCell from "@/components/ui/SystemSizeCell";
 import ColumnHeader from "@/components/ui/ColumnHeader";
 import type { ParsedColumnFilters } from "@/lib/data-hub/column-filters";
 import type { ProjectSortColumn } from "@/lib/data-hub/project-sort";
@@ -60,13 +62,6 @@ function TD({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
       {children}
     </td>
   );
-}
-
-function systemSizeWatts(kw: number | null | undefined) {
-  if (kw == null) return <span className="text-slate-300">—</span>;
-  const n = Number(kw);
-  if (isNaN(n)) return <span className="text-slate-300">—</span>;
-  return <>{Math.round(n * 1000).toLocaleString("en-US")} W</>;
 }
 
 export async function ProjectsTable({
@@ -157,7 +152,11 @@ export async function ProjectsTable({
                 {/* Deal */}
                 <SortableColumnHeader label="Stage" column="project_stage" currentSort={sort} currentDir={sortDir} />
                 <SortableColumnHeader label="Contract Date" column="contract_signed_date" currentSort={sort} currentDir={sortDir} />
-                <SortableColumnHeader label="System Size" column="system_size_kw" currentSort={sort} currentDir={sortDir} />
+                <SystemSizeColumnHeader
+                  column="system_size_kw"
+                  currentSort={sort}
+                  currentDir={sortDir}
+                />
                 <SortableColumnHeader label="Total Cost" column="total_system_cost" currentSort={sort} currentDir={sortDir} />
                 <TH>Calc Gross PPW</TH>
                 <TH>Calc Net PPW</TH>
@@ -250,7 +249,7 @@ export async function ProjectsTable({
                   {/* Deal */}
                   <TD><Str v={d.stage} /></TD>
                   <TD><Str v={d.contractDate} /></TD>
-                  <TD>{systemSizeWatts(d.systemSizeKw)}</TD>
+                  <TD><SystemSizeCell kw={d.systemSizeKw} /></TD>
                   <TD><Money v={d.totalCost} /></TD>
                   <TD>
                     <Ppw
@@ -277,7 +276,7 @@ export async function ProjectsTable({
                   <TD><Str v={p.remittance?.finance_type} /></TD>
                   <TD><Str v={p.remittance?.financier} /></TD>
                   <TD><Str v={p.remittance?.utility_provider} /></TD>
-                  <TD><Num v={p.remittance?.pv_size} /></TD>
+                  <TD><SystemSizeCell kw={p.remittance?.pv_size} /></TD>
                   <TD><Money v={p.remittance?.redline_price_tier} /></TD>
                   <TD><Money v={p.remittance?.contract_amount} /></TD>
                   <TD><Money v={p.remittance?.gross_ppw} /></TD>

@@ -10,6 +10,7 @@ import {
   ProjectsTableMetaProvider,
   useProjectsTableTotal,
 } from "./ProjectsTableMeta";
+import { SystemSizeUnitProvider } from "./SystemSizeUnitContext";
 
 /** Matches the loaded table viewport so layout does not jump between loading and loaded. */
 const TABLE_PANEL_HEIGHT = "calc(100vh - 140px)";
@@ -35,7 +36,9 @@ export default function ProjectsListClient({
   return (
     <ProjectsPagerProvider>
       <ProjectsTableMetaProvider>
-        <ProjectsListBody>{children}</ProjectsListBody>
+        <SystemSizeUnitProvider>
+          <ProjectsListBody>{children}</ProjectsListBody>
+        </SystemSizeUnitProvider>
       </ProjectsTableMetaProvider>
     </ProjectsPagerProvider>
   );
