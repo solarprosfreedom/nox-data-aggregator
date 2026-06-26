@@ -76,6 +76,18 @@ function projectStage(
   return remitStatus?.trim() || projectStageVal?.trim() || null;
 }
 
+/** Latest remittance customer name wins when project name is empty. */
+function projectCustomer(
+  opportunityName: string | null | undefined,
+  remitCustomerName: string | null | undefined
+) {
+  return (
+    customerDisplayName(opportunityName) ??
+    remitCustomerName?.trim() ??
+    null
+  );
+}
+
 /** Sales rep: closer or sales advisor; if only setter exists, use setter. */
 function salesRepName(p: {
   closer_name?: string | null;
@@ -256,7 +268,7 @@ export async function ProjectsTable({
                   </TD>
                   <TD>
                     <span className="font-medium text-slate-900">
-                      <Str v={customerDisplayName(p.opportunity_name)} />
+                      <Str v={projectCustomer(p.opportunity_name, p.remittance?.customer_name)} />
                     </span>
                   </TD>
                   <TD><Str v={p.email} /></TD>

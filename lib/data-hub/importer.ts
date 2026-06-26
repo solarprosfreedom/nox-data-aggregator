@@ -5,7 +5,7 @@ import {
   refreshNetEpcForProjects,
 } from "@/lib/data-hub/remittance-project-sync";
 import {
-  mapProjectPersonalInfoFromRow,
+  buildProjectPersonalInfoSync,
   syncProjectPersonalInfoFromImport,
   type ProjectPersonalInfoSync,
 } from "@/lib/data-hub/project-personal-sync";
@@ -199,10 +199,9 @@ export async function processImport(options: {
         if (projectId) {
           matched++;
           affectedProjectIds.add(projectId);
-          projectSyncUpdates.push({
-            projectId,
-            ...mapProjectPersonalInfoFromRow(rawRow),
-          });
+          projectSyncUpdates.push(
+            buildProjectPersonalInfoSync(projectId, rawRow, mapped),
+          );
         }
 
         const patch = remittanceUpsertPayload({

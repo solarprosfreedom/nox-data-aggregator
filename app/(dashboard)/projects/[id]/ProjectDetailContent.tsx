@@ -69,7 +69,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
   const db = createServerSupabase();
   const { data: remittanceRows, error: remittanceErr } = await db
     .from("remittance")
-    .select("payment_date, payment_this_week, total_sp_paid, status, battery_price, adder_amount")
+    .select("payment_date, payment_this_week, total_sp_paid, status, customer_name, battery_price, adder_amount")
     .eq("project_id", id)
     .order("imported_at", { ascending: false })
     .limit(10);
@@ -79,6 +79,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
 
   const p = project as Record<string, unknown>;
   const latestRemitStatus = remittance[0]?.status as string | undefined;
+  const latestRemitCustomer = remittance[0]?.customer_name as string | undefined;
   const latestRemit = remittance[0] as
     | { battery_price?: number | null; adder_amount?: number | null }
     | undefined;
@@ -93,7 +94,9 @@ export async function ProjectDetailContent({ id }: { id: string }) {
     latestRemit?.adder_amount
   );
   const displayName =
-    customerDisplayName(p.opportunity_name as string) ?? (p.project_id as string);
+    customerDisplayName(p.opportunity_name as string) ??
+    latestRemitCustomer?.trim() ??
+    (p.project_id as string);
   const stage =
     latestRemitStatus?.trim() || (p.project_stage as string | undefined)?.trim() || null;
   const salesRep =

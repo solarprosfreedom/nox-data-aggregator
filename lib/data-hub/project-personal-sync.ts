@@ -62,6 +62,33 @@ export function mapProjectPersonalInfoFromRow(
   }) as Omit<ProjectPersonalInfoSync, "projectId">;
 }
 
+/** Merge CSV row + mapped remittance fields for project sync. */
+export function buildProjectPersonalInfoSync(
+  projectId: string,
+  rawRow: Record<string, string>,
+  mapped: {
+    customer_name?: string | null;
+    status?: string | null;
+    sales_advisor?: string | null;
+  },
+): ProjectPersonalInfoSync {
+  const fromRow = mapProjectPersonalInfoFromRow(rawRow);
+  return {
+    projectId,
+    ...fromRow,
+    opportunity_name:
+      fromRow.opportunity_name ||
+      mapped.customer_name?.trim() ||
+      undefined,
+    project_stage:
+      fromRow.project_stage || mapped.status?.trim() || undefined,
+    sales_advisor_name:
+      fromRow.sales_advisor_name ||
+      mapped.sales_advisor?.trim() ||
+      undefined,
+  };
+}
+
 /** Merge field-mapper project + remittance patches onto project personal fields. */
 export function projectPersonalInfoFromImportPatches(
   projectPatch: Record<string, unknown>,
