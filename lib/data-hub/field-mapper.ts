@@ -240,7 +240,7 @@ const REMITTANCE_KEYWORDS: Record<string, string[]> = {
   hes_code: ["hes code", "hes id", "hes_id", "project id", "pid"],
   payment_date: ["payment date", "pay date", "week ending"],
   customer_name: ["customer name", "customer"],
-  sales_partner: ["sales partner", "partner", "installer", "inty"],
+  sales_partner: ["sales partner", "partner", "inty"],
   sales_advisor: ["sales advisor"],
   channel: ["channel"],
   status: ["remit status", "remittance status", "install status", "job status"],

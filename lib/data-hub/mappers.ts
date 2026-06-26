@@ -37,7 +37,7 @@ export function mapProjectsSheetRow(row: Record<string, string>) {
     system_size_kw: parseNumeric(
       pickField(row, "System Size (kW)", "System Size")
     ),
-    installer: pickField(row, "Installer", "Dealer", "Dealer Name", "Sales Partner") || null,
+    installer: pickField(row, "Installer", "Dealer", "Dealer Name") || null,
     updated_at: new Date().toISOString(),
   };
 }

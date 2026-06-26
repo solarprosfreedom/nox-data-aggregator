@@ -48,7 +48,6 @@ export type RemittanceMappedForProjectSync = {
   customer_name?: string | null;
   status?: string | null;
   sales_advisor?: string | null;
-  sales_partner?: string | null;
   contract_date?: string | null;
   pv_size?: number | null;
   contract_amount?: number | null;
@@ -94,8 +93,7 @@ export function mapProjectPersonalInfoFromRow(
     system_size_kw: systemSize ?? undefined,
     total_system_cost: totalCost ?? undefined,
     installer:
-      pickField(row, "Installer", "Dealer", "Dealer Name", "Sales Partner") ||
-      undefined,
+      pickField(row, "Installer", "Dealer", "Dealer Name") || undefined,
   }) as Omit<ProjectImportSync, "projectId">;
 }
 
@@ -124,8 +122,6 @@ export function buildProjectPersonalInfoSync(
     system_size_kw: fromRow.system_size_kw ?? mapped.pv_size ?? undefined,
     total_system_cost:
       fromRow.total_system_cost ?? mapped.contract_amount ?? undefined,
-    installer:
-      fromRow.installer || mapped.sales_partner?.trim() || undefined,
   };
 }
 
@@ -167,10 +163,7 @@ export function projectPersonalInfoFromImportPatches(
       (projectPatch.total_system_cost as number | undefined) ??
       (remittancePatch.contract_amount as number | undefined) ??
       undefined,
-    installer:
-      (projectPatch.installer as string | undefined) ||
-      (remittancePatch.sales_partner as string | undefined) ||
-      undefined,
+    installer: (projectPatch.installer as string | undefined) || undefined,
   }) as Omit<ProjectImportSync, "projectId">;
 }
 

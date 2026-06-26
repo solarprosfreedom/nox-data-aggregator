@@ -73,9 +73,6 @@ export function resolveProjectDisplay(
       remittance?.sales_advisor?.trim() ||
       project.setter_name?.trim() ||
       null,
-    installer:
-      project.installer?.trim() ||
-      remittance?.sales_partner?.trim() ||
-      null,
+    installer: project.installer?.trim() || null,
   };
 }
