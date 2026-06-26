@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getProject } from "@/lib/data-hub/queries";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { computeGrossPpw, computeNetPpw, formatPpw } from "@/lib/data-hub/ppw";
-import { customerDisplayName } from "@/lib/data-hub/normalize";
+import { resolveProjectDisplay } from "@/lib/data-hub/project-field-resolution";
 
 function Section({
   title,
@@ -69,7 +69,9 @@ export async function ProjectDetailContent({ id }: { id: string }) {
   const db = createServerSupabase();
   const { data: remittanceRows, error: remittanceErr } = await db
     .from("remittance")
-    .select("payment_date, payment_this_week, total_sp_paid, status, customer_name, battery_price, adder_amount")
+    .select(
+      "payment_date, payment_this_week, total_sp_paid, status, customer_name, sales_advisor, sales_partner, contract_date, pv_size, contract_amount, battery_price, adder_amount",
+    )
     .eq("project_id", id)
     .order("imported_at", { ascending: false })
     .limit(10);
@@ -78,32 +80,22 @@ export async function ProjectDetailContent({ id }: { id: string }) {
     remittanceErr?.message.includes("remittance") ? [] : (remittanceRows ?? []);
 
   const p = project as Record<string, unknown>;
-  const latestRemitStatus = remittance[0]?.status as string | undefined;
-  const latestRemitCustomer = remittance[0]?.customer_name as string | undefined;
-  const latestRemit = remittance[0] as
-    | { battery_price?: number | null; adder_amount?: number | null }
-    | undefined;
-  const grossPpw = computeGrossPpw(
-    p.total_system_cost as number | null,
-    p.system_size_kw as number | null
+  const latestRemit = remittance[0] as Record<string, unknown> | undefined;
+  const resolved = resolveProjectDisplay(
+    p as Parameters<typeof resolveProjectDisplay>[0],
+    latestRemit as Parameters<typeof resolveProjectDisplay>[1],
   );
+  const grossPpw = computeGrossPpw(resolved.totalCost, resolved.systemSizeKw);
   const netPpw = computeNetPpw(
-    p.total_system_cost as number | null,
-    p.system_size_kw as number | null,
-    latestRemit?.battery_price,
-    latestRemit?.adder_amount
+    resolved.totalCost,
+    resolved.systemSizeKw,
+    latestRemit?.battery_price as number | null,
+    latestRemit?.adder_amount as number | null,
   );
   const displayName =
-    customerDisplayName(p.opportunity_name as string) ??
-    latestRemitCustomer?.trim() ??
-    (p.project_id as string);
-  const stage =
-    latestRemitStatus?.trim() || (p.project_stage as string | undefined)?.trim() || null;
-  const salesRep =
-    (p.closer_name as string | undefined)?.trim() ||
-    (p.sales_advisor_name as string | undefined)?.trim() ||
-    (p.setter_name as string | undefined)?.trim() ||
-    null;
+    resolved.customer ?? (p.project_id as string);
+  const stage = resolved.stage;
+  const salesRep = resolved.salesRep;
 
   return (
     <>
@@ -129,18 +121,18 @@ export async function ProjectDetailContent({ id }: { id: string }) {
         </Section>
         <Section title="Status">
           <Field label="Stage" value={stage} />
-          <Field label="Contract signed" value={p.contract_signed_date} />
+          <Field label="Contract signed" value={resolved.contractDate} />
         </Section>
         <Section title="Sales">
           <Field label="Setter" value={p.setter_name} />
           <Field label="Setter email" value={p.setter_email} />
           <Field label="Sales rep" value={salesRep} />
-          <Field label="Sales advisor" value={p.sales_advisor_name} />
+          <Field label="Sales advisor" value={p.sales_advisor_name ?? latestRemit?.sales_advisor} />
           <Field label="Advisor email" value={p.sales_advisor_email} />
         </Section>
         <Section title="System">
-          <Field label="System size" value={systemSizeWatts(p.system_size_kw)} />
-          <MoneyField label="Total cost" value={p.total_system_cost} />
+          <Field label="System size" value={systemSizeWatts(resolved.systemSizeKw)} />
+          <MoneyField label="Total cost" value={resolved.totalCost} />
           <Field label="Gross PPW (calc)" value={formatPpw(grossPpw)} />
           <Field label="Net PPW (calc)" value={formatPpw(netPpw)} />
         </Section>
@@ -153,6 +145,7 @@ export async function ProjectDetailContent({ id }: { id: string }) {
           <Field label="Team" value={p.team} />
           <Field label="Dealer" value={p.dealer_name} />
           <Field label="Office" value={p.office_name} />
+          <Field label="Installer" value={resolved.installer} />
         </Section>
       </div>
 

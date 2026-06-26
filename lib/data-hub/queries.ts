@@ -59,6 +59,7 @@ export type RemittanceSummary = {
   status: string | null;
   payment_status: string | null;
   sales_partner: string | null;
+  sales_advisor: string | null;
   channel: string | null;
   latest_contract: string | null;
   contract_date: string | null;

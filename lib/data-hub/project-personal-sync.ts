@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { pickField } from "@/lib/csv/parse";
+import { parseDate, parseNumeric, pickField } from "@/lib/csv/parse";
 import { customerDisplayName } from "@/lib/data-hub/normalize";
 import { omitEmptyPatchFields } from "@/lib/data-hub/remittance-upsert";
 
-/** Personal / contact fields on `projects` (SSOT for the UI). */
-export type ProjectPersonalInfoSync = {
+/** Fields on `projects` that remittance / CSV import may patch (SSOT = projects). */
+export type ProjectImportSync = {
   projectId: string;
   opportunity_name?: string;
   first_name?: string;
@@ -17,9 +17,16 @@ export type ProjectPersonalInfoSync = {
   city?: string;
   state_code?: string;
   postal_code?: string;
+  contract_signed_date?: string;
+  system_size_kw?: number;
+  total_system_cost?: number;
+  installer?: string;
 };
 
-const PROJECT_PERSONAL_KEYS = [
+/** @deprecated Use ProjectImportSync */
+export type ProjectPersonalInfoSync = ProjectImportSync;
+
+const STRING_SYNC_KEYS = [
   "opportunity_name",
   "first_name",
   "last_name",
@@ -31,12 +38,26 @@ const PROJECT_PERSONAL_KEYS = [
   "city",
   "state_code",
   "postal_code",
+  "contract_signed_date",
+  "installer",
 ] as const;
 
-/** Extract personal-info updates from any import row (remittance or projects CSV). */
+const NUMBER_SYNC_KEYS = ["system_size_kw", "total_system_cost"] as const;
+
+export type RemittanceMappedForProjectSync = {
+  customer_name?: string | null;
+  status?: string | null;
+  sales_advisor?: string | null;
+  sales_partner?: string | null;
+  contract_date?: string | null;
+  pv_size?: number | null;
+  contract_amount?: number | null;
+};
+
+/** Extract project-field updates from any import row (remittance or projects CSV). */
 export function mapProjectPersonalInfoFromRow(
   row: Record<string, string>,
-): Omit<ProjectPersonalInfoSync, "projectId"> {
+): Omit<ProjectImportSync, "projectId"> {
   const firstName = pickField(row, "First Name");
   const lastName = pickField(row, "Last Name");
   const customerName = pickField(row, "Customer Name");
@@ -45,6 +66,16 @@ export function mapProjectPersonalInfoFromRow(
     opportunityName ||
     customerName ||
     [firstName, lastName].filter(Boolean).join(" ");
+
+  const contractDate = parseDate(
+    pickField(row, "Original Contract Signed date", "Contract Date"),
+  );
+  const systemSize = parseNumeric(
+    pickField(row, "System Size (kW)", "System Size", "① PV Size", "PV Size"),
+  );
+  const totalCost = parseNumeric(
+    pickField(row, "Total System Cost", "Contract Amount"),
+  );
 
   return omitEmptyPatchFields({
     opportunity_name: customerDisplayName(composedName) ?? undefined,
@@ -59,19 +90,21 @@ export function mapProjectPersonalInfoFromRow(
     city: pickField(row, "City") || undefined,
     state_code: pickField(row, "State") || undefined,
     postal_code: pickField(row, "Zip Code", "Zip") || undefined,
-  }) as Omit<ProjectPersonalInfoSync, "projectId">;
+    contract_signed_date: contractDate ?? undefined,
+    system_size_kw: systemSize ?? undefined,
+    total_system_cost: totalCost ?? undefined,
+    installer:
+      pickField(row, "Installer", "Dealer", "Dealer Name", "Sales Partner") ||
+      undefined,
+  }) as Omit<ProjectImportSync, "projectId">;
 }
 
 /** Merge CSV row + mapped remittance fields for project sync. */
 export function buildProjectPersonalInfoSync(
   projectId: string,
   rawRow: Record<string, string>,
-  mapped: {
-    customer_name?: string | null;
-    status?: string | null;
-    sales_advisor?: string | null;
-  },
-): ProjectPersonalInfoSync {
+  mapped: RemittanceMappedForProjectSync,
+): ProjectImportSync {
   const fromRow = mapProjectPersonalInfoFromRow(rawRow);
   return {
     projectId,
@@ -86,21 +119,25 @@ export function buildProjectPersonalInfoSync(
       fromRow.sales_advisor_name ||
       mapped.sales_advisor?.trim() ||
       undefined,
+    contract_signed_date:
+      fromRow.contract_signed_date || mapped.contract_date || undefined,
+    system_size_kw: fromRow.system_size_kw ?? mapped.pv_size ?? undefined,
+    total_system_cost:
+      fromRow.total_system_cost ?? mapped.contract_amount ?? undefined,
+    installer:
+      fromRow.installer || mapped.sales_partner?.trim() || undefined,
   };
 }
 
-/** Merge field-mapper project + remittance patches onto project personal fields. */
+/** Merge field-mapper project + remittance patches onto project fields. */
 export function projectPersonalInfoFromImportPatches(
   projectPatch: Record<string, unknown>,
   remittancePatch: Record<string, unknown>,
-): Omit<ProjectPersonalInfoSync, "projectId"> {
-  const customerFromRemit = remittancePatch.customer_name as string | undefined;
-  const opportunityFromProject = projectPatch.opportunity_name as string | undefined;
-
+): Omit<ProjectImportSync, "projectId"> {
   return omitEmptyPatchFields({
     opportunity_name:
-      opportunityFromProject?.trim() ||
-      customerFromRemit?.trim() ||
+      (projectPatch.opportunity_name as string | undefined)?.trim() ||
+      (remittancePatch.customer_name as string | undefined)?.trim() ||
       undefined,
     first_name: (projectPatch.first_name as string | undefined) || undefined,
     last_name: (projectPatch.last_name as string | undefined) || undefined,
@@ -118,30 +155,55 @@ export function projectPersonalInfoFromImportPatches(
     city: (projectPatch.city as string | undefined) || undefined,
     state_code: (projectPatch.state_code as string | undefined) || undefined,
     postal_code: (projectPatch.postal_code as string | undefined) || undefined,
-  }) as Omit<ProjectPersonalInfoSync, "projectId">;
+    contract_signed_date:
+      (projectPatch.contract_signed_date as string | undefined) ||
+      (remittancePatch.contract_date as string | undefined) ||
+      undefined,
+    system_size_kw:
+      (projectPatch.system_size_kw as number | undefined) ??
+      (remittancePatch.pv_size as number | undefined) ??
+      undefined,
+    total_system_cost:
+      (projectPatch.total_system_cost as number | undefined) ??
+      (remittancePatch.contract_amount as number | undefined) ??
+      undefined,
+    installer:
+      (projectPatch.installer as string | undefined) ||
+      (remittancePatch.sales_partner as string | undefined) ||
+      undefined,
+  }) as Omit<ProjectImportSync, "projectId">;
 }
 
 /**
- * Push non-empty personal-info fields onto linked projects.
- * Projects table is SSOT — remittance/import only patches fields present in the file.
+ * Push non-empty fields onto linked projects.
+ * Projects table is SSOT — import only patches columns present in the file.
  */
 export async function syncProjectPersonalInfoFromImport(
   db: SupabaseClient,
-  updates: ProjectPersonalInfoSync[],
+  updates: ProjectImportSync[],
 ): Promise<number> {
-  const byProject = new Map<string, Record<string, string>>();
+  const byProject = new Map<string, Record<string, string | number>>();
 
   for (const update of updates) {
     const { projectId, ...fields } = update;
     if (!projectId) continue;
 
     const entry = byProject.get(projectId) ?? {};
-    for (const key of PROJECT_PERSONAL_KEYS) {
+
+    for (const key of STRING_SYNC_KEYS) {
       const value = fields[key];
       if (typeof value === "string" && value.trim()) {
         entry[key] = value.trim();
       }
     }
+
+    for (const key of NUMBER_SYNC_KEYS) {
+      const value = fields[key];
+      if (value != null && Number.isFinite(Number(value))) {
+        entry[key] = Number(value);
+      }
+    }
+
     byProject.set(projectId, entry);
   }
 

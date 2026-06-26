@@ -5,7 +5,8 @@ import ColumnHeader from "@/components/ui/ColumnHeader";
 import type { ParsedColumnFilters } from "@/lib/data-hub/column-filters";
 import type { ProjectSortColumn } from "@/lib/data-hub/project-sort";
 import { computeGrossPpw, computeNetPpw } from "@/lib/data-hub/ppw";
-import { customerDisplayName, resolveStateCode } from "@/lib/data-hub/normalize";
+import { resolveStateCode } from "@/lib/data-hub/normalize";
+import { resolveProjectDisplay } from "@/lib/data-hub/project-field-resolution";
 import EditProjectDrawer from "./EditProjectDrawer";
 import DeleteProjectButton from "./DeleteProjectButton";
 import TableLoadNotifier from "./TableLoadNotifier";
@@ -66,40 +67,6 @@ function systemSizeWatts(kw: number | null | undefined) {
   const n = Number(kw);
   if (isNaN(n)) return <span className="text-slate-300">—</span>;
   return <>{Math.round(n * 1000).toLocaleString("en-US")} W</>;
-}
-
-/** Latest remittance import wins over project stage when present. */
-function projectStage(
-  projectStageVal: string | null | undefined,
-  remitStatus: string | null | undefined
-) {
-  return remitStatus?.trim() || projectStageVal?.trim() || null;
-}
-
-/** Latest remittance customer name wins when project name is empty. */
-function projectCustomer(
-  opportunityName: string | null | undefined,
-  remitCustomerName: string | null | undefined
-) {
-  return (
-    customerDisplayName(opportunityName) ??
-    remitCustomerName?.trim() ??
-    null
-  );
-}
-
-/** Sales rep: closer or sales advisor; if only setter exists, use setter. */
-function salesRepName(p: {
-  closer_name?: string | null;
-  sales_advisor_name?: string | null;
-  setter_name?: string | null;
-}) {
-  return (
-    p.closer_name?.trim() ||
-    p.sales_advisor_name?.trim() ||
-    p.setter_name?.trim() ||
-    null
-  );
 }
 
 export async function ProjectsTable({
@@ -252,7 +219,9 @@ export async function ProjectsTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {projects.map((p, i) => (
+              {projects.map((p, i) => {
+                const d = resolveProjectDisplay(p, p.remittance);
+                return (
                 <tr key={p.id} className="hover:bg-slate-50">
                   {/* Identity */}
                   <TD mono>
@@ -268,7 +237,7 @@ export async function ProjectsTable({
                   </TD>
                   <TD>
                     <span className="font-medium text-slate-900">
-                      <Str v={projectCustomer(p.opportunity_name, p.remittance?.customer_name)} />
+                      <Str v={d.customer} />
                     </span>
                   </TD>
                   <TD><Str v={p.email} /></TD>
@@ -279,20 +248,20 @@ export async function ProjectsTable({
                   <TD><Str v={resolveStateCode(p)} /></TD>
                   <TD><Str v={p.postal_code} /></TD>
                   {/* Deal */}
-                  <TD><Str v={projectStage(p.project_stage, p.remittance?.status)} /></TD>
-                  <TD><Str v={p.contract_signed_date} /></TD>
-                  <TD>{systemSizeWatts(p.system_size_kw)}</TD>
-                  <TD><Money v={p.total_system_cost} /></TD>
+                  <TD><Str v={d.stage} /></TD>
+                  <TD><Str v={d.contractDate} /></TD>
+                  <TD>{systemSizeWatts(d.systemSizeKw)}</TD>
+                  <TD><Money v={d.totalCost} /></TD>
                   <TD>
                     <Ppw
-                      v={computeGrossPpw(p.total_system_cost, p.system_size_kw)}
+                      v={computeGrossPpw(d.totalCost, d.systemSizeKw)}
                     />
                   </TD>
                   <TD>
                     <Ppw
                       v={computeNetPpw(
-                        p.total_system_cost,
-                        p.system_size_kw,
+                        d.totalCost,
+                        d.systemSizeKw,
                         p.remittance?.battery_price,
                         p.remittance?.adder_amount
                       )}
@@ -300,9 +269,9 @@ export async function ProjectsTable({
                   </TD>
                   {/* People */}
                   <TD><Str v={p.setter_name} /></TD>
-                  <TD><Str v={salesRepName(p)} /></TD>
+                  <TD><Str v={d.salesRep} /></TD>
                   {/* Org */}
-                  <TD><Str v={p.installer} /></TD>
+                  <TD><Str v={d.installer} /></TD>
                   {/* Remittance (latest) */}
                   <TD><Str v={p.remittance?.payment_date} /></TD>
                   <TD><Str v={p.remittance?.finance_type} /></TD>
@@ -351,7 +320,8 @@ export async function ProjectsTable({
                     </td>
                   )}
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
       <TableTotalNotifier total={total} />
