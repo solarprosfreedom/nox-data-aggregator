@@ -1,4 +1,4 @@
-import { parseCsv } from "@/lib/csv/parse";
+import { findHeaderRowIndex, parseCsv } from "@/lib/csv/parse";
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -116,12 +116,13 @@ export function detectImportSourceFromCsv(
 ): ImportSource {
   const fromName = detectImportSource(fileName);
   const rows = parseCsv(content);
-  const headers = rows[0]?.map((h) => h.trim()) ?? [];
+  const headerIdx = findHeaderRowIndex(rows);
+  const headers = rows[headerIdx]?.map((h) => h.trim()) ?? [];
   if (headers.length === 0) return fromName;
 
   if (
     headerMatches(headers, "payment date", "hes code", "payment this week") ||
-    headerMatches(headers, "partner commission", "total sp paid", "c0", "c1")
+    headerMatches(headers, "partner commission", "total sp paid", "gross ppw", "c0", "c1")
   ) {
     return "remittance";
   }

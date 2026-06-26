@@ -3,7 +3,7 @@ import type { ImportSource } from "@/lib/data-hub/normalize";
 import { mapProjectsSheetRow, mapRemittanceRow } from "@/lib/data-hub/mappers";
 import {
   refreshNetEpcForProjects,
-  syncProjectStagesFromRemittance,
+  syncProjectsFromRemittanceImport,
 } from "@/lib/data-hub/remittance-project-sync";
 import { omitEmptyPatchFields, remittanceUpsertPayload } from "@/lib/data-hub/remittance-upsert";
 import {
@@ -164,7 +164,11 @@ export async function processImport(options: {
       }
 
       const importedAt = new Date().toISOString();
-      const stageUpdates: { projectId: string; stage: string }[] = [];
+      const projectSyncUpdates: {
+        projectId: string;
+        stage?: string;
+        customerName?: string;
+      }[] = [];
       const linkedProjectIds = [
         ...new Set(
           pendingRows
@@ -194,9 +198,11 @@ export async function processImport(options: {
         if (projectId) {
           matched++;
           affectedProjectIds.add(projectId);
-          if (mapped.status?.trim()) {
-            stageUpdates.push({ projectId, stage: mapped.status.trim() });
-          }
+          projectSyncUpdates.push({
+            projectId,
+            stage: mapped.status?.trim() || undefined,
+            customerName: mapped.customer_name?.trim() || undefined,
+          });
         }
 
         const patch = remittanceUpsertPayload({
@@ -236,7 +242,7 @@ export async function processImport(options: {
       }
 
       if (affectedProjectIds.size > 0) {
-        await syncProjectStagesFromRemittance(db, stageUpdates);
+        await syncProjectsFromRemittanceImport(db, projectSyncUpdates);
         await refreshNetEpcForProjects(db, [...affectedProjectIds]);
       }
     }

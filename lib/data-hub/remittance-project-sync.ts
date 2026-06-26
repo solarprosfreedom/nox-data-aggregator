@@ -110,15 +110,21 @@ export async function refreshNetEpcForProjects(
   return { scanned, updated, skipped };
 }
 
-/** Push remittance Status into projects.project_stage for linked projects. */
-export async function syncProjectStagesFromRemittance(
+/** Push remittance Status / Customer Name onto linked projects. */
+export async function syncProjectsFromRemittanceImport(
   db: SupabaseClient,
-  updates: { projectId: string; stage: string }[],
+  updates: { projectId: string; stage?: string; customerName?: string }[],
 ): Promise<number> {
-  const byProject = new Map<string, string>();
-  for (const { projectId, stage } of updates) {
-    const trimmed = stage.trim();
-    if (projectId && trimmed) byProject.set(projectId, trimmed);
+  const byProject = new Map<string, { stage?: string; customerName?: string }>();
+
+  for (const { projectId, stage, customerName } of updates) {
+    if (!projectId) continue;
+    const entry = byProject.get(projectId) ?? {};
+    const trimmedStage = stage?.trim();
+    const trimmedName = customerName?.trim();
+    if (trimmedStage) entry.stage = trimmedStage;
+    if (trimmedName) entry.customerName = trimmedName;
+    byProject.set(projectId, entry);
   }
 
   if (byProject.size === 0) return 0;
@@ -126,17 +132,31 @@ export async function syncProjectStagesFromRemittance(
   const now = new Date().toISOString();
   let updated = 0;
 
-  for (const [projectId, stage] of byProject) {
-    const { error } = await db
-      .from("projects")
-      .update({ project_stage: stage, updated_at: now })
-      .eq("id", projectId);
+  for (const [projectId, fields] of byProject) {
+    const patch: { updated_at: string; project_stage?: string; opportunity_name?: string } = {
+      updated_at: now,
+    };
+    if (fields.stage) patch.project_stage = fields.stage;
+    if (fields.customerName) patch.opportunity_name = fields.customerName;
+    if (!fields.stage && !fields.customerName) continue;
 
+    const { error } = await db.from("projects").update(patch).eq("id", projectId);
     if (error) throw new Error(error.message);
     updated += 1;
   }
 
   return updated;
+}
+
+/** @deprecated Use syncProjectsFromRemittanceImport */
+export async function syncProjectStagesFromRemittance(
+  db: SupabaseClient,
+  updates: { projectId: string; stage: string }[],
+): Promise<number> {
+  return syncProjectsFromRemittanceImport(
+    db,
+    updates.map(({ projectId, stage }) => ({ projectId, stage })),
+  );
 }
 
 /** Backfill net_epc for every project that has at least one remittance row. */

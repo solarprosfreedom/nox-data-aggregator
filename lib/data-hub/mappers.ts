@@ -8,11 +8,15 @@ export function mapProjectsSheetRow(row: Record<string, string>) {
   const firstName = pickField(row, "First Name");
   const lastName = pickField(row, "Last Name");
   const opportunityName = pickField(row, "Opportunity Name");
+  const customerName = pickField(row, "Customer Name");
 
   return {
     project_id: projectId,
     opportunity_name: customerDisplayName(
-      opportunityName || [firstName, lastName].filter(Boolean).join(" ") || null
+      opportunityName ||
+        customerName ||
+        [firstName, lastName].filter(Boolean).join(" ") ||
+        null
     ),
     first_name: firstName || null,
     last_name: lastName || null,
@@ -25,7 +29,7 @@ export function mapProjectsSheetRow(row: Record<string, string>) {
     sales_advisor_name:
       pickField(row, "Sales Advisor: Full Name", "Sales Advisor") || null,
     sales_advisor_email: pickField(row, "Sales Advisor: Email") || null,
-    project_stage: pickField(row, "Project Stage", "Stage") || null,
+    project_stage: pickField(row, "Project Stage", "Stage", "Status") || null,
     contract_signed_date: parseDate(
       pickField(row, "Original Contract Signed date", "Contract Date")
     ),

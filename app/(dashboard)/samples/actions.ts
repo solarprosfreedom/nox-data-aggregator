@@ -132,7 +132,11 @@ export async function importWithMapping(
   let remittanceUpdated = 0;
   const errorMessages: string[] = [];
   const affectedProjectIds = new Set<string>();
-  const stageUpdates: { projectId: string; stage: string }[] = [];
+  const projectSyncUpdates: {
+    projectId: string;
+    stage?: string;
+    customerName?: string;
+  }[] = [];
   const importFileHash = `${String(fileName ?? "manual")}-${Date.now()}`;
 
   for (let i = 0; i < rows.length; i++) {
@@ -226,9 +230,13 @@ export async function importWithMapping(
           affectedProjectIds.add(projectUuid);
         }
         const remStatus = remittancePatch.status as string | undefined;
-        if (remStatus?.trim()) {
-          stageUpdates.push({ projectId: projectUuid, stage: remStatus.trim() });
-        }
+        const remCustomer = remittancePatch.customer_name as string | undefined;
+        const projectCustomer = projectPatch.opportunity_name as string | undefined;
+        projectSyncUpdates.push({
+          projectId: projectUuid,
+          stage: remStatus?.trim() || undefined,
+          customerName: (remCustomer || projectCustomer)?.trim() || undefined,
+        });
       } else {
         const { error } = await db.from("remittance").insert({
           ...remittancePatch,
@@ -247,18 +255,22 @@ export async function importWithMapping(
           affectedProjectIds.add(projectUuid);
         }
         const remStatus = remittancePatch.status as string | undefined;
-        if (remStatus?.trim()) {
-          stageUpdates.push({ projectId: projectUuid, stage: remStatus.trim() });
-        }
+        const remCustomer = remittancePatch.customer_name as string | undefined;
+        const projectCustomer = projectPatch.opportunity_name as string | undefined;
+        projectSyncUpdates.push({
+          projectId: projectUuid,
+          stage: remStatus?.trim() || undefined,
+          customerName: (remCustomer || projectCustomer)?.trim() || undefined,
+        });
       }
     }
   }
 
-  if (stageUpdates.length > 0) {
-    const { syncProjectStagesFromRemittance } = await import(
+  if (projectSyncUpdates.length > 0) {
+    const { syncProjectsFromRemittanceImport } = await import(
       "@/lib/data-hub/remittance-project-sync"
     );
-    await syncProjectStagesFromRemittance(db, stageUpdates);
+    await syncProjectsFromRemittanceImport(db, projectSyncUpdates);
   }
 
   if (affectedProjectIds.size > 0) {
