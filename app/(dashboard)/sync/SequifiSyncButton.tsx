@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { syncWithSequifi, type SequifiSyncResult } from "./sequifi-actions";
+import { applySequifiSync } from "@/lib/sequifi/sync-client";
 
 export default function SequifiSyncButton() {
   const [pending, startTransition] = useTransition();
@@ -14,7 +15,9 @@ export default function SequifiSyncButton() {
     setError(null);
     setMode(dryRun ? "preview" : "apply");
     startTransition(async () => {
-      const res = await syncWithSequifi({ dryRun });
+      const res = dryRun
+        ? await syncWithSequifi({ dryRun: true })
+        : await applySequifiSync();
       if ("error" in res) setError(res.error);
       else setResult(res);
     });
@@ -55,7 +58,9 @@ export default function SequifiSyncButton() {
           </button>
           {pending && (
             <p className="text-sm text-slate-500">
-              Reconciling projects with Sequifi sales…
+              {mode === "apply"
+                ? "Pushing to Sequifi… this may take a few minutes. Keep this tab open."
+                : "Reconciling projects with Sequifi sales…"}
             </p>
           )}
         </div>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { syncWithSequifi } from "@/app/(dashboard)/sync/sequifi-actions";
+import { applySequifiSync } from "@/lib/sequifi/sync-client";
 
 type Status = { text: string; ok: boolean } | null;
 
@@ -27,7 +28,9 @@ export default function SequifiSyncInlineButton() {
     setMenuOpen(false);
     setStatus(null);
     startTransition(async () => {
-      const res = await syncWithSequifi({ dryRun });
+      const res = dryRun
+        ? await syncWithSequifi({ dryRun: true })
+        : await applySequifiSync();
       if ("error" in res) {
         setStatus({ text: res.error, ok: false });
       } else {

@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import { resolve } from "path";
 import { createClient } from "@supabase/supabase-js";
-import { syncWithSequifi } from "../app/(dashboard)/sync/sequifi-actions";
+import { runSequifiSync } from "../lib/sequifi/sync";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
@@ -66,7 +66,7 @@ async function main() {
   await analyzeReadiness();
 
   console.log("\n=== Sync Sequifi PREVIEW (same as Preview button) ===");
-  const r = await syncWithSequifi({ dryRun: true });
+  const r = await runSequifiSync({ dryRun: true });
   if ("error" in r) {
     console.error("ERROR:", r.error);
     process.exit(1);
