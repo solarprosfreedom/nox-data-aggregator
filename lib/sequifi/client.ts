@@ -5,8 +5,8 @@
 //
 // Confirmed against the live API:
 //  - Upsert is keyed on `pid` (no duplicates created for an existing pid).
-//  - Solar records require: pid, customer_name, system_size_kw, customer_signoff,
-//    customer_state, location_code. Everything else is optional.
+//  - Solar records require: pid, customer_name, kw, customer_signoff,
+//    customer_state, location_code ({STATE}.{InstallerCode}, e.g. CA.Axia).
 //  - Validation failures return HTTP 400 with data.errors[] strings that are
 //    prefixed "Record [i]: ..." so we can isolate the offending records.
 
@@ -132,19 +132,39 @@ export async function fetchAllSequifiSales(): Promise<SequifiSale[]> {
 export type SequifiUpsertRecord = {
   pid: string;
   customer_name: string;
-  system_size_kw: number;
+  kw: number;
   customer_signoff: string; // YYYY-MM-DD
   customer_state: string;
   location_code: string;
   gross_account_value?: number | null;
   install_partner?: string | null;
   job_status?: string | null;
+  setter1_name?: string | null;
+  setter1_email?: string | null;
+  setter1_id?: number | null;
+  closer1_name?: string | null;
+  closer1_email?: string | null;
+  closer1_id?: number | null;
+  gross_epc?: number | null;
   net_epc?: number | null;
-  epc?: number | null;
   adders?: number | null;
   dealer_fee_amount?: number | null;
-  closer1_id?: number | null;
-  setter1_id?: number | null;
+  finance_type?: string | null;
+  financier?: string | null;
+  payment_status?: string | null;
+  total_commission?: number | null;
+  total_paid_to_date?: number | null;
+  remittance_payment_date?: string | null;
+  m1_amount?: number | null;
+  m2_amount?: number | null;
+  m3_amount?: number | null;
+  adjusted_m3_amount?: number | null;
+  m1_paid?: number | null;
+  m2_paid?: number | null;
+  m3_paid?: number | null;
+  m1_payable_date?: string | null;
+  m2_payable_date?: string | null;
+  m3_payable_date?: string | null;
 };
 
 export type UpsertOutcome = {

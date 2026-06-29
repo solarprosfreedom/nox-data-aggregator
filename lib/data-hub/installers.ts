@@ -3,6 +3,8 @@ export const KNOWN_INSTALLERS = [
   "Axia Solar Corp",
   "Illum",
   "OWE",
+  "Empwr",
+  "INTY",
   "Tron",
   "Sunergy",
   "LGCY",

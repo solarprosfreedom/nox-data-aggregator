@@ -14,6 +14,7 @@ import {
   normalizeName,
   repName,
 } from "@/lib/sequifi/matcher";
+import { buildSequifiUpsertRecord } from "@/lib/sequifi/build-upsert-record";
 import type { RemittanceSummary } from "@/lib/data-hub/queries";
 
 // Supabase is the source of truth. This reconcile:
@@ -29,6 +30,8 @@ type ProjectRow = {
   opportunity_name: string | null;
   sequifi_sale_id: string | null;
   state_code: string | null;
+  address_line1: string | null;
+  postal_code: string | null;
   system_size_kw: number | null;
   total_system_cost: number | null;
   contract_signed_date: string | null;
@@ -36,7 +39,11 @@ type ProjectRow = {
   project_stage: string | null;
   net_epc: number | null;
   setter_name: string | null;
+  setter_email: string | null;
   closer_name: string | null;
+  closer_email: string | null;
+  sales_advisor_name: string | null;
+  sales_advisor_email: string | null;
   setter_sequifi_employee_id: string | null;
   closer_sequifi_employee_id: string | null;
 };
@@ -59,7 +66,7 @@ export type SequifiSyncResult = {
 export type SequifiSyncResponse = SequifiSyncResult | { error: string };
 
 const PROJECT_COLUMNS =
-  "id, project_id, opportunity_name, sequifi_sale_id, state_code, system_size_kw, total_system_cost, contract_signed_date, installer, project_stage, net_epc, setter_name, closer_name, setter_sequifi_employee_id, closer_sequifi_employee_id";
+  "id, project_id, opportunity_name, sequifi_sale_id, state_code, address_line1, postal_code, system_size_kw, total_system_cost, contract_signed_date, installer, project_stage, net_epc, setter_name, setter_email, closer_name, closer_email, sales_advisor_name, sales_advisor_email, setter_sequifi_employee_id, closer_sequifi_employee_id";
 
 async function loadLatestRemittanceByProject(
   db: ReturnType<typeof createServerSupabase>,
@@ -105,70 +112,6 @@ async function loadAllProjects(
     from += pageSize;
   }
   return all;
-}
-
-function fmtDate(v: string | null): string | null {
-  if (!v) return null;
-  const d = v.length >= 10 ? v.slice(0, 10) : v;
-  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
-}
-
-function parseSequifiEmployeeId(value: string | null | undefined): number | null {
-  const n = Number(value?.trim());
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function resolveJobStatus(
-  p: ProjectRow,
-  remit: RemittanceSummary | null,
-  isNew: boolean,
-): string | null {
-  const stage = p.project_stage?.trim();
-  if (stage) return stage;
-  const remitStatus = remit?.status?.trim();
-  if (remitStatus) return remitStatus;
-  if (isNew) return "Pending";
-  return null;
-}
-
-// Builds a Solar-valid upsert record, or null if a required field is missing.
-function buildUpsertRecord(
-  p: ProjectRow,
-  pid: string,
-  isNew: boolean,
-  remit: RemittanceSummary | null,
-): SequifiUpsertRecord | null {
-  const customer_name = p.opportunity_name?.trim();
-  const system_size_kw = p.system_size_kw;
-  const customer_signoff = fmtDate(p.contract_signed_date);
-  const customer_state = p.state_code?.trim();
-  if (!customer_name || system_size_kw == null || !customer_signoff || !customer_state) return null;
-
-  const rec: SequifiUpsertRecord = {
-    pid,
-    customer_name,
-    system_size_kw,
-    customer_signoff,
-    customer_state,
-    location_code: customer_state,
-  };
-  if (p.total_system_cost != null) rec.gross_account_value = p.total_system_cost;
-  if (p.installer?.trim()) rec.install_partner = p.installer.trim();
-  if (p.net_epc != null) rec.net_epc = p.net_epc;
-  if (remit?.gross_ppw != null) rec.epc = remit.gross_ppw;
-  if (remit?.adder_amount != null) rec.adders = remit.adder_amount;
-  if (remit?.finance_fee != null) rec.dealer_fee_amount = remit.finance_fee;
-
-  const jobStatus = resolveJobStatus(p, remit, isNew);
-  if (jobStatus) rec.job_status = jobStatus;
-
-  const closer1Id = parseSequifiEmployeeId(p.closer_sequifi_employee_id);
-  if (closer1Id != null) rec.closer1_id = closer1Id;
-
-  const setter1Id = parseSequifiEmployeeId(p.setter_sequifi_employee_id);
-  if (setter1Id != null) rec.setter1_id = setter1Id;
-
-  return rec;
 }
 
 function buildProjectFromSale(sale: SequifiSale): Record<string, unknown> {
@@ -254,7 +197,12 @@ export async function syncWithSequifi({
       if (m.kind === "matched") {
         result.linkedExisting++;
         const pid = m.sale.pid;
-        const rec = buildUpsertRecord(p, pid, false, remittanceByProject.get(p.id) ?? null);
+        const rec = buildSequifiUpsertRecord(
+          p,
+          pid,
+          false,
+          remittanceByProject.get(p.id) ?? null,
+        );
         if (!rec) {
           result.skippedMissingFields++;
           continue;
@@ -267,7 +215,12 @@ export async function syncWithSequifi({
       } else {
         const pid = p.project_id?.trim();
         const rec = pid
-          ? buildUpsertRecord(p, pid, true, remittanceByProject.get(p.id) ?? null)
+          ? buildSequifiUpsertRecord(
+              p,
+              pid,
+              true,
+              remittanceByProject.get(p.id) ?? null,
+            )
           : null;
         if (!pid || !rec) {
           result.skippedMissingFields++;
