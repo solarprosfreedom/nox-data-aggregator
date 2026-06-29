@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 type TerrosPerson = {
@@ -34,6 +34,21 @@ type TerrosWebhookBody = {
   entity?: string;
   action?: string;
   data?: TerrosAccountPayload;
+};
+
+type TerrosUpsertRow = {
+  account_id: string;
+  opportunity_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  address_line1: string | null;
+  postal_code: string | null;
+  setter_name: string | null;
+  setter_email: string | null;
+  closer_name: string | null;
+  raw_terros: TerrosAccountPayload;
 };
 
 function normalizedEmail(value: string | undefined): string | null {
@@ -83,6 +98,39 @@ function unauthorizedIfSecretMismatch(req: NextRequest): NextResponse | null {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
+function buildUpsertRow(accountId: string, data: TerrosAccountPayload): TerrosUpsertRow {
+  const address = data.address ?? data.location;
+  const setterName = fullName(data.owner);
+  const closerName = fullName(data.closer);
+  const resident = residentName(data.resident);
+
+  return {
+    account_id: accountId,
+    opportunity_name: resident.opportunityName,
+    first_name: resident.firstName,
+    last_name: resident.lastName,
+    email: normalizedEmail(data.resident?.email),
+    phone: normalizedText(data.resident?.phone),
+    address_line1: normalizedText(address?.line1),
+    postal_code: normalizedText(address?.postal1),
+    setter_name: setterName,
+    setter_email: normalizedEmail(data.owner?.email),
+    closer_name: closerName,
+    raw_terros: data,
+  };
+}
+
+async function upsertTerrosAccount(row: TerrosUpsertRow): Promise<void> {
+  const db = createServerSupabase();
+  const { error } = await db.from("terros_accounts").upsert(
+    { ...row, updated_at: new Date().toISOString() },
+    { onConflict: "account_id", ignoreDuplicates: false },
+  );
+  if (error) {
+    console.error("[terros webhook] upsert failed:", row.account_id, error.message);
+  }
+}
+
 export async function GET() {
   return NextResponse.json({
     ok: true,
@@ -116,56 +164,26 @@ export async function POST(req: NextRequest) {
 
   const accountId = normalizedText(data?.id) ?? normalizedText(data?.accountId);
   if (!accountId || !data) {
-    return NextResponse.json(
-      { received: true, skipped: true, reason: "Missing account id or data payload" },
-      { status: 200 }
-    );
-  }
-
-  const address = data.address ?? data.location;
-  const setterName = fullName(data.owner);
-  const closerName = fullName(data.closer);
-  const resident = residentName(data.resident);
-
-  const upsertRow = {
-    account_id: accountId,
-    opportunity_name: resident.opportunityName,
-    first_name: resident.firstName,
-    last_name: resident.lastName,
-    email: normalizedEmail(data.resident?.email),
-    phone: normalizedText(data.resident?.phone),
-    address_line1: normalizedText(address?.line1),
-    postal_code: normalizedText(address?.postal1),
-    setter_name: setterName,
-    setter_email: normalizedEmail(data.owner?.email),
-    closer_name: closerName,
-    // Keep raw_terros as the account object so existing matcher helpers
-    // (ownerEmailFromRaw/closerEmailFromRaw) can read owner/closer directly.
-    raw_terros: data,
-  };
-
-  try {
-    const db = createServerSupabase();
-    const { error } = await db.from("terros_accounts").upsert(upsertRow, {
-      onConflict: "account_id",
-      ignoreDuplicates: false,
-    });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
     return NextResponse.json({
       received: true,
-      entity,
-      action,
-      account_id: accountId,
-      upserted: true,
+      skipped: true,
+      reason: "Missing account id or data payload",
     });
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Server error" },
-      { status: 500 }
-    );
   }
+
+  const upsertRow = buildUpsertRow(accountId, data);
+
+  // Respond immediately — Terros retries on ~10s timeout; slow Supabase upserts
+  // on nano were causing retry storms and API errors.
+  after(async () => {
+    await upsertTerrosAccount(upsertRow);
+  });
+
+  return NextResponse.json({
+    received: true,
+    queued: true,
+    entity,
+    action,
+    account_id: accountId,
+  });
 }
