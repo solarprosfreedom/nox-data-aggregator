@@ -32,7 +32,7 @@ async function loadProjectAndRemittance(projectId: string) {
   const { data: project, error: projectErr } = await db
     .from("projects")
     .select(
-      "id, project_id, opportunity_name, state_code, system_size_kw, total_system_cost, contract_signed_date, installer, project_stage, net_epc, setter_name, setter_email, closer_name, closer_email, sales_advisor_name, sales_advisor_email, setter_sequifi_employee_id, closer_sequifi_employee_id",
+      "id, project_id, opportunity_name, state_code, address_line1, postal_code, system_size_kw, total_system_cost, contract_signed_date, installer, project_stage, net_epc, setter_name, setter_email, closer_name, closer_email, sales_advisor_name, sales_advisor_email, setter_sequifi_employee_id, closer_sequifi_employee_id",
     )
     .eq("project_id", projectId)
     .maybeSingle();
