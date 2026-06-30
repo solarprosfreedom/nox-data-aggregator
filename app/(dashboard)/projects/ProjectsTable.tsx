@@ -142,7 +142,7 @@ export async function ProjectsTable({
                 <TH>#</TH>
                 <SortableColumnHeader label="Project ID" column="project_id" currentSort={sort} currentDir={sortDir} />
                 <TH>Sequifi ID</TH>
-                <SortableColumnHeader label="Customer" column="opportunity_name" currentSort={sort} currentDir={sortDir} />
+                <SortableColumnHeader label="Customer Name" column="opportunity_name" currentSort={sort} currentDir={sortDir} />
                 <SortableColumnHeader label="Email" column="email" currentSort={sort} currentDir={sortDir} />
                 <SortableColumnHeader label="Phone" column="phone" currentSort={sort} currentDir={sortDir} />
                 {/* Address */}

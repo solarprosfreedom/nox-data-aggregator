@@ -432,7 +432,7 @@ export async function projectIdsMatchingRemittanceFilters(
 
 export const PROJECT_TABLE_COLUMN_DEFS: ColumnFilterDef[] = [
   { id: "project_id", label: "Project ID", kind: "text", source: "projects", dbColumn: "project_id" },
-  { id: "opportunity_name", label: "Customer", kind: "text", source: "projects", dbColumn: "opportunity_name" },
+  { id: "opportunity_name", label: "Customer Name", kind: "text", source: "projects", dbColumn: "opportunity_name" },
   { id: "email", label: "Email", kind: "text", source: "projects", dbColumn: "email" },
   { id: "phone", label: "Phone", kind: "text", source: "projects", dbColumn: "phone" },
   { id: "address_line1", label: "Address", kind: "text", source: "projects", dbColumn: "address_line1" },
