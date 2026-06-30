@@ -77,19 +77,6 @@ function sampleTestRecord() {
     adders: 250,
     finance_type: "TPO - Monthly",
     financier: "Enfin",
-    payment_status: "M1 Paid",
-    total_commission: 15641,
-    total_paid_to_date: 5000,
-    remittance_payment_date: "2026-06-12",
-    m1_amount: 3000,
-    m2_amount: 2000,
-    m3_amount: 10641,
-    adjusted_m3_amount: 15091,
-    m1_paid: 3000,
-    m2_paid: 2000,
-    m3_paid: 0,
-    m1_payable_date: "2026-06-12",
-    m2_payable_date: "2026-06-12",
   };
 }
 

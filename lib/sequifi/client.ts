@@ -7,6 +7,7 @@
 //  - Upsert is keyed on `pid` (no duplicates created for an existing pid).
 //  - Solar records require: pid, customer_name, kw, customer_signoff,
 //    customer_state, location_code ({STATE}.{InstallerCode}, e.g. CA.Axia).
+//  - Hub pushes sale detail only; remittance/M1/M2/M3 stay in the hub.
 //  - Validation failures return HTTP 400 with data.errors[] strings that are
 //    prefixed "Record [i]: ..." so we can isolate the offending records.
 
@@ -151,20 +152,6 @@ export type SequifiUpsertRecord = {
   dealer_fee_amount?: number | null;
   finance_type?: string | null;
   financier?: string | null;
-  payment_status?: string | null;
-  total_commission?: number | null;
-  total_paid_to_date?: number | null;
-  remittance_payment_date?: string | null;
-  m1_amount?: number | null;
-  m2_amount?: number | null;
-  m3_amount?: number | null;
-  adjusted_m3_amount?: number | null;
-  m1_paid?: number | null;
-  m2_paid?: number | null;
-  m3_paid?: number | null;
-  m1_payable_date?: string | null;
-  m2_payable_date?: string | null;
-  m3_payable_date?: string | null;
 };
 
 export type UpsertOutcome = {

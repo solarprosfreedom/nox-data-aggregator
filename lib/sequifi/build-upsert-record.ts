@@ -45,19 +45,6 @@ function round2(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
-function sumNums(...vals: (number | null | undefined)[]): number | null {
-  let total = 0;
-  let any = false;
-  for (const v of vals) {
-    const n = num(v);
-    if (n != null) {
-      total += n;
-      any = true;
-    }
-  }
-  return any ? total : null;
-}
-
 function closerName(project: ProjectForSequifiUpsert): string | null {
   return (
     project.closer_name?.trim() ||
@@ -72,15 +59,6 @@ function closerEmail(project: ProjectForSequifiUpsert): string | null {
     project.sales_advisor_email?.trim() ||
     null
   );
-}
-
-function milestonePayableDate(
-  remit: RemittanceSummary | null,
-  paid: number | null | undefined,
-): string | null {
-  const paidAmount = num(paid);
-  if (paidAmount == null || paidAmount <= 0) return null;
-  return fmtDate(remit?.payment_date);
 }
 
 /** Builds a Solar-valid upsert record, or null if required fields are missing. */
@@ -143,42 +121,6 @@ export function buildSequifiUpsertRecord(
     if (remit.finance_fee != null) rec.dealer_fee_amount = remit.finance_fee;
     if (remit.finance_type?.trim()) rec.finance_type = remit.finance_type.trim();
     if (remit.financier?.trim()) rec.financier = remit.financier.trim();
-    if (remit.payment_status?.trim()) {
-      rec.payment_status = remit.payment_status.trim();
-    }
-
-    const paymentDate = fmtDate(remit.payment_date);
-    if (paymentDate) rec.remittance_payment_date = paymentDate;
-
-    const m1 = num(remit.c0);
-    const m2 = num(remit.c1);
-    const m3 = num(remit.c2);
-    if (m1 != null) rec.m1_amount = m1;
-    if (m2 != null) rec.m2_amount = m2;
-    if (m3 != null) rec.m3_amount = m3;
-
-    const adjustedM3 = num(remit.adjusted_c2);
-    if (adjustedM3 != null) rec.adjusted_m3_amount = adjustedM3;
-
-    const m1Paid = num(remit.c0_paid);
-    const m2Paid = num(remit.c1_paid);
-    const m3Paid = num(remit.c2_paid);
-    if (m1Paid != null) rec.m1_paid = m1Paid;
-    if (m2Paid != null) rec.m2_paid = m2Paid;
-    if (m3Paid != null) rec.m3_paid = m3Paid;
-
-    const m1Payable = milestonePayableDate(remit, remit.c0_paid);
-    if (m1Payable) rec.m1_payable_date = m1Payable;
-    const m2Payable = milestonePayableDate(remit, remit.c1_paid);
-    if (m2Payable) rec.m2_payable_date = m2Payable;
-    const m3Payable = milestonePayableDate(remit, remit.c2_paid);
-    if (m3Payable) rec.m3_payable_date = m3Payable;
-
-    const totalCommission = sumNums(remit.c0, remit.c1, remit.c2);
-    if (totalCommission != null) rec.total_commission = totalCommission;
-
-    const totalPaid = sumNums(remit.c0_paid, remit.c1_paid, remit.c2_paid);
-    if (totalPaid != null) rec.total_paid_to_date = totalPaid;
   } else if (project.net_epc != null) {
     rec.net_epc = round2(num(project.net_epc)!);
   }
