@@ -2,6 +2,8 @@ import Link from "next/link";
 import ImportUploadForm from "./ImportUploadForm";
 import MappingForm from "../samples/MappingForm";
 import ImportsTabs from "./ImportsTabs";
+import PageHeader from "@/components/ui/PageHeader";
+import { IconHistory, IconImport } from "@/components/ui/icons";
 import { listInstallerNames, listMappingTemplates } from "@/lib/data-hub/mapping-templates";
 
 export default async function ImportsPage() {
@@ -12,20 +14,19 @@ export default async function ImportsPage() {
 
   return (
     <div className="max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Import data</h1>
-          <p className="text-sm text-slate-500">
-            Upload project sheets, remittance files, or any custom CSV.
-          </p>
-        </div>
-        <Link
-          href="/imports/history"
-          className="text-sm font-medium text-cyan-700 hover:underline"
-        >
-          View history →
-        </Link>
-      </div>
+      <PageHeader
+        icon={<IconImport size={20} />}
+        title="Import data"
+        actions={
+          <Link
+            href="/imports/history"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            <IconHistory size={16} className="text-slate-500" />
+            View history
+          </Link>
+        }
+      />
 
       <ImportsTabs
         quickImport={

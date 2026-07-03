@@ -3,9 +3,12 @@ import { Suspense } from "react";
 import ProjectsListClient from "./ProjectsListClient";
 import ProjectsTableSkeleton from "./ProjectsTableSkeleton";
 import { ProjectsTableSection } from "./ProjectsTableSection";
+import { ProjectsToolbar, ToolbarSkeleton } from "./ProjectsToolbar";
 import ExportCsvButton from "@/components/ui/ExportCsvButton";
 import SyncSettersButton from "./SyncSettersButton";
 import SequifiSyncInlineButton from "./SequifiSyncInlineButton";
+import PageHeader from "@/components/ui/PageHeader";
+import { IconProjects, IconUpload } from "@/components/ui/icons";
 import { getCurrentProfile } from "@/lib/auth/profile";
 
 export const dynamic = "force-dynamic";
@@ -33,26 +36,34 @@ export default async function ProjectsPage({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
-        <div className="flex items-center gap-3">
-          {isAdmin && (
+      <PageHeader
+        icon={<IconProjects size={20} />}
+        title="Projects"
+        actions={
+          isAdmin ? (
             <>
               <SyncSettersButton />
               <SequifiSyncInlineButton />
               <ExportCsvButton href={exportHref} />
               <Link
                 href="/imports"
-                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-600 bg-cyan-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700"
               >
+                <IconUpload size={16} />
                 Import data
               </Link>
             </>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
-      <ProjectsListClient>
+      <ProjectsListClient
+        toolbar={
+          <Suspense fallback={<ToolbarSkeleton />}>
+            <ProjectsToolbar />
+          </Suspense>
+        }
+      >
         <Suspense fallback={<ProjectsTableSkeleton />}>
           <ProjectsTableSection params={params} />
         </Suspense>

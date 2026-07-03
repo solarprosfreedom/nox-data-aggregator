@@ -6,15 +6,32 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOutAction } from "@/app/login/actions";
+import {
+  IconApps,
+  IconDatabase,
+  IconHistory,
+  IconImport,
+  IconLogOut,
+  IconProjects,
+  IconUsers,
+} from "@/components/ui/icons";
 
-const ADMIN_NAV = [
-  { href: "/projects", label: "Projects" },
-  { href: "/imports", label: "Import", exact: true },
-  { href: "/imports/history", label: "History" },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: ReactNode;
+  exact?: boolean;
+};
+
+const ADMIN_NAV: NavItem[] = [
+  { href: "/projects", label: "Projects", icon: <IconProjects size={17} /> },
+  { href: "/imports", label: "Import", icon: <IconImport size={17} />, exact: true },
+  { href: "/imports/history", label: "History", icon: <IconHistory size={17} /> },
+  { href: "/sync", label: "Sync", icon: <IconDatabase size={17} /> },
 ];
 
-const MEMBER_NAV = [
-  { href: "/projects", label: "Projects", exact: true },
+const MEMBER_NAV: NavItem[] = [
+  { href: "/projects", label: "Projects", icon: <IconProjects size={17} />, exact: true },
 ];
 
 function NavLinkInner({ label }: { label: string }) {
@@ -33,23 +50,28 @@ function NavLinkInner({ label }: { label: string }) {
 function NavItem({
   href,
   label,
+  icon,
   active,
-}: {
-  href: string;
-  label: string;
-  active: boolean;
-  exact?: boolean;
-}) {
+}: NavItem & { active: boolean }) {
   return (
     <Link
       href={href}
       prefetch={true}
-      className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
+      className={`group flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
         active
-          ? "bg-cyan-50 text-cyan-800"
-          : "text-slate-600 hover:bg-slate-50"
+          ? "bg-cyan-50 text-cyan-900 ring-1 ring-cyan-100"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       }`}
     >
+      <span
+        className={`flex h-7 w-7 items-center justify-center rounded-md transition ${
+          active
+            ? "bg-cyan-100 text-cyan-700"
+            : "bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-slate-700"
+        }`}
+      >
+        {icon}
+      </span>
       <NavLinkInner label={label} />
     </Link>
   );
@@ -68,8 +90,8 @@ export default function AppShell({
   const NAV = isAdmin ? ADMIN_NAV : MEMBER_NAV;
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="flex w-56 flex-col border-r border-slate-200 bg-white">
+    <div className="flex min-h-screen bg-slate-50/80">
+      <aside className="flex w-60 flex-col border-r border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-5">
           <div className="flex items-center gap-2">
             <Image
@@ -80,14 +102,20 @@ export default function AppShell({
               className="h-[34px] w-auto object-contain"
             />
           </div>
+          <p className="mt-2 text-xs font-medium uppercase tracking-wider text-slate-400">
+            Data Hub
+          </p>
         </div>
         <nav className="flex-1 space-y-1 p-3">
           <Link
             href="/apps"
             prefetch={true}
-            className="mb-2 block rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
+            className="mb-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
           >
-            ← All apps
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-500">
+              <IconApps size={16} />
+            </span>
+            All apps
           </Link>
           {NAV.map((item) => {
             const active = item.exact
@@ -98,6 +126,7 @@ export default function AppShell({
                 key={item.href}
                 href={item.href}
                 label={item.label}
+                icon={item.icon}
                 active={active}
               />
             );
@@ -106,6 +135,7 @@ export default function AppShell({
             <NavItem
               href="/admin"
               label="User Access"
+              icon={<IconUsers size={17} />}
               active={pathname === "/admin"}
             />
           )}
@@ -115,14 +145,15 @@ export default function AppShell({
           <form action={signOutAction}>
             <button
               type="submit"
-              className="mt-2 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+              className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-50"
             >
+              <IconLogOut size={16} className="text-slate-400" />
               Sign out
             </button>
           </form>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      <main className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
     </div>
   );
 }

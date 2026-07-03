@@ -1,7 +1,7 @@
 import type { RemittanceSummary } from "@/lib/data-hub/queries";
 import type { SequifiUpsertRecord } from "@/lib/sequifi/client";
 import { resolveStateCode } from "@/lib/data-hub/normalize";
-import { resolveSequifiJobStatus } from "@/lib/sequifi/job-status";
+import { resolveSequifiJobFields } from "@/lib/sequifi/job-status";
 import { sequifiLocationCode } from "@/lib/sequifi/location-code";
 
 export type ProjectForSequifiUpsert = {
@@ -14,6 +14,7 @@ export type ProjectForSequifiUpsert = {
   contract_signed_date: string | null;
   installer: string | null;
   project_stage: string | null;
+  cancel_date?: string | null;
   net_epc: number | null;
   setter_name: string | null;
   setter_email: string | null;
@@ -90,12 +91,14 @@ export function buildSequifiUpsertRecord(
   }
   if (project.installer?.trim()) rec.install_partner = project.installer.trim();
 
-  const jobStatus = resolveSequifiJobStatus(
+  const { jobStatus, dateCancelled } = resolveSequifiJobFields(
     project.project_stage,
     remit?.status,
     isNew,
+    project.cancel_date,
   );
   if (jobStatus) rec.job_status = jobStatus;
+  if (dateCancelled) rec.date_cancelled = dateCancelled;
 
   const setterName = project.setter_name?.trim();
   if (setterName) rec.setter1_name = setterName;

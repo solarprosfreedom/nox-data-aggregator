@@ -1,28 +1,33 @@
 import SyncButton from "./SyncButton";
 import SequifiSyncButton from "./SequifiSyncButton";
 import SyncFilters from "./SyncFilters";
+import PageHeader from "@/components/ui/PageHeader";
+import { IconDatabase, IconSync } from "@/components/ui/icons";
 
 export default function SyncPage() {
   return (
-    <div className="max-w-4xl">
-      <section>
-        <h1 className="mb-2 text-2xl font-bold text-slate-900">Sync Setters</h1>
-        <p className="mb-6 text-sm text-slate-500">
-          Match projects to the synced Terros accounts by email, phone, or address
-          to fill in setter and closer names.
-        </p>
+    <div className="max-w-4xl space-y-10">
+      <PageHeader icon={<IconDatabase size={20} />} title="Sync" />
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+            <IconSync size={16} />
+          </span>
+          <h2 className="text-base font-semibold text-slate-900">Sync setters</h2>
+        </div>
         <SyncButton />
       </section>
 
-      <section>
-        <h1 className="mb-2 text-2xl font-bold text-slate-900">Sequifi</h1>
-        <p className="mb-6 text-sm text-slate-500">
-          Two-way reconcile between the hub and Sequifi sales.
-        </p>
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
+            <IconDatabase size={16} />
+          </span>
+          <h2 className="text-base font-semibold text-slate-900">Sequifi</h2>
+        </div>
         <SequifiSyncButton />
       </section>
-
-      <div className="my-12 border-t border-slate-200" aria-hidden />
 
       <SyncFilters />
     </div>

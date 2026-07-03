@@ -244,7 +244,12 @@ export async function runSequifiSync({
           continue;
         }
         pushRecords.push(rec);
-        pushApply.push({ id: p.id, pid, isNew: false, sequifi_job_status: m.sale.job_status });
+        pushApply.push({
+          id: p.id,
+          pid,
+          isNew: false,
+          sequifi_job_status: rec.job_status ?? m.sale.job_status,
+        });
         if (result.samples.update.length < 10) {
           result.samples.update.push(`${p.project_id} -> pid ${pid} (${p.opportunity_name})`);
         }
@@ -263,7 +268,7 @@ export async function runSequifiSync({
           continue;
         }
         pushRecords.push(rec);
-        pushApply.push({ id: p.id, pid, isNew: true, sequifi_job_status: "Pending" });
+        pushApply.push({ id: p.id, pid, isNew: true, sequifi_job_status: rec.job_status ?? "Signed" });
         if (result.samples.create.length < 10) {
           result.samples.create.push(`${pid} (${p.opportunity_name})`);
         }

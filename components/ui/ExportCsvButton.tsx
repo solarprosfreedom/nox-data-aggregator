@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconDownload } from "@/components/ui/icons";
 
 export default function ExportCsvButton({
   href,
@@ -44,7 +45,7 @@ export default function ExportCsvButton({
       type="button"
       onClick={onClick}
       disabled={isExporting}
-      className={`flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 ${
+      className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition ${
         isExporting ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50"
       }`}
     >
@@ -55,19 +56,7 @@ export default function ExportCsvButton({
         </>
       ) : (
         <>
-          <svg
-            className="h-4 w-4 text-slate-500"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"
-            />
-          </svg>
+          <IconDownload size={16} className="text-slate-500" />
           {label}
         </>
       )}

@@ -1,6 +1,5 @@
 "use client";
 
-import ProjectsSearch from "./ProjectsSearch";
 import Pagination from "@/components/ui/Pagination";
 import {
   ProjectsPagerProvider,
@@ -13,7 +12,7 @@ import {
 import { SystemSizeUnitProvider } from "./SystemSizeUnitContext";
 
 /** Matches the loaded table viewport so layout does not jump between loading and loaded. */
-const TABLE_PANEL_HEIGHT = "calc(100vh - 140px)";
+const TABLE_PANEL_HEIGHT = "calc(100vh - 180px)";
 
 function TableLoadingOverlay({ message }: { message: string }) {
   return (
@@ -29,30 +28,36 @@ function TableLoadingOverlay({ message }: { message: string }) {
 }
 
 export default function ProjectsListClient({
+  toolbar,
   children,
 }: {
+  toolbar: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <ProjectsPagerProvider>
       <ProjectsTableMetaProvider>
         <SystemSizeUnitProvider>
-          <ProjectsListBody>{children}</ProjectsListBody>
+          <ProjectsListBody toolbar={toolbar}>{children}</ProjectsListBody>
         </SystemSizeUnitProvider>
       </ProjectsTableMetaProvider>
     </ProjectsPagerProvider>
   );
 }
 
-function ProjectsListBody({ children }: { children: React.ReactNode }) {
+function ProjectsListBody({
+  toolbar,
+  children,
+}: {
+  toolbar: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const { isNavigating, loadingMessage } = useProjectsPager();
   const total = useProjectsTableTotal();
 
   return (
     <>
-      <div className="mb-4">
-        <ProjectsSearch />
-      </div>
+      {toolbar}
 
       <div
         className="relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconImport, IconMap } from "@/components/ui/icons";
 
 export default function ImportsTabs({
   quickImport,
@@ -14,10 +15,18 @@ export default function ImportsTabs({
   return (
     <>
       <div className="mb-6 flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
-        <TabBtn active={tab === "quick"} onClick={() => setTab("quick")}>
+        <TabBtn
+          active={tab === "quick"}
+          onClick={() => setTab("quick")}
+          icon={<IconImport size={16} />}
+        >
           Quick Import
         </TabBtn>
-        <TabBtn active={tab === "mapper"} onClick={() => setTab("mapper")}>
+        <TabBtn
+          active={tab === "mapper"}
+          onClick={() => setTab("mapper")}
+          icon={<IconMap size={16} />}
+        >
           Field Mapper
         </TabBtn>
       </div>
@@ -31,21 +40,24 @@ export default function ImportsTabs({
 function TabBtn({
   active,
   onClick,
+  icon,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  icon: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+      className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-colors ${
         active
           ? "bg-white text-slate-900 shadow-sm"
           : "text-slate-500 hover:text-slate-700"
       }`}
     >
+      {icon}
       {children}
     </button>
   );

@@ -66,7 +66,7 @@ function sampleTestRecord() {
     location_code: "CA.Axia",
     gross_account_value: 48559.9,
     install_partner: "Axia Solar Corp",
-    job_status: "Permitting",
+    job_status: "Permit",
     setter1_name: "Alex Jon Duffy",
     setter1_email: "alexduffy@noxpwr.com",
     closer1_name: "Alex Duffy",

@@ -5,6 +5,7 @@ import {
   useProjectFilterParam,
   useProjectFilterValues,
 } from "./useProjectFilterParam";
+import { IconChevronDown, IconFilter } from "@/components/ui/icons";
 
 type Props = {
   setters: string[];
@@ -85,43 +86,19 @@ export default function PeopleStatusFilters({ setters, salesReps, statuses }: Pr
         aria-expanded={expanded}
         aria-controls="people-status-filters-panel"
         onClick={() => setExpanded((prev) => !prev)}
-        className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+        className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 14 14"
-          fill="none"
-          aria-hidden
-          className="text-slate-500"
-        >
-          <path
-            d="M1.5 2.5h11l-3.5 4v4l-4 1.5V6.5L1.5 2.5z"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <IconFilter size={16} className="text-slate-500" />
         Filters
         {activeCount > 0 && (
           <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-semibold text-cyan-700">
             {activeCount}
           </span>
         )}
-        <svg
-          className={`h-4 w-4 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden
-        >
-          <path
-            d="M5 7.5L10 12.5L15 7.5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <IconChevronDown
+          size={16}
+          className={`text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
       </button>
 
       {expanded && (

@@ -140,6 +140,7 @@ export type SequifiUpsertRecord = {
   gross_account_value?: number | null;
   install_partner?: string | null;
   job_status?: string | null;
+  date_cancelled?: string | null;
   setter1_name?: string | null;
   setter1_email?: string | null;
   setter1_id?: number | null;
