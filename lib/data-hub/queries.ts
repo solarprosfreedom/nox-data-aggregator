@@ -5,16 +5,12 @@ import {
 } from "@/lib/data-hub/project-sort";
 import {
   ALL_COLUMN_FILTER_DEFS,
-  applyProjectColumnFilter,
-  applySalesRepFilter,
-  applySalesRepMultiSelectFilter,
-  applySetterMultiSelectFilter,
+  columnDefById,
   isColumnFilterActive,
-  projectIdsMatchingRemittanceFilters,
-  type ColumnFilterMap,
-  type MultiSelectColumnFilterMap,
+  matchesColumnFilter,
   type ParsedColumnFilters,
 } from "@/lib/data-hub/column-filters";
+import { listAllPublicDeals, type PublicDealRow } from "@/lib/public-deals/client";
 
 export type Project = {
   id: string;
@@ -113,6 +109,119 @@ export type ProjectFilterValues = {
   statuses: string[];
 };
 
+function strOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s || null;
+}
+
+function numOrNull(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
+  const p = row.project ?? {};
+  const r = row.remittance ?? {};
+  const projectId = strOrNull(p.project_id) ?? row.pk_value;
+  const updatedAt =
+    strOrNull(p.updated_at) ??
+    strOrNull(row.raw?.updated_at) ??
+    strOrNull(r.imported_at) ??
+    new Date(0).toISOString();
+
+  return {
+    id: projectId,
+    project_id: projectId,
+    opportunity_name: strOrNull(p.opportunity_name),
+    first_name: strOrNull(p.first_name),
+    last_name: strOrNull(p.last_name),
+    email: strOrNull(p.email),
+    phone: strOrNull(p.phone),
+    address_line1: strOrNull(p.address_line1),
+    city: strOrNull(p.city),
+    state_code: strOrNull(p.state_code),
+    postal_code: strOrNull(p.postal_code),
+    project_stage: strOrNull(p.project_stage),
+    contract_signed_date: strOrNull(p.contract_signed_date),
+    total_system_cost: numOrNull(p.total_system_cost),
+    system_size_kw: numOrNull(p.system_size_kw),
+    sales_advisor_name: strOrNull(p.sales_advisor_name),
+    sales_advisor_email: strOrNull(p.sales_advisor_email),
+    setter_name: strOrNull(p.setter_name),
+    setter_email: strOrNull(p.setter_email),
+    closer_name: strOrNull(p.closer_name),
+    closer_email: strOrNull(p.closer_email),
+    market: strOrNull(p.market),
+    team: strOrNull(p.team),
+    region: strOrNull(p.region),
+    division: strOrNull(p.division),
+    dealer_name: strOrNull(p.dealer_name),
+    office_name: strOrNull(p.office_name),
+    installer: strOrNull(p.installer) ?? row.installer,
+    terros_account_id: strOrNull(p.terros_account_id),
+    sequifi_sale_id: strOrNull(p.sequifi_sale_id),
+    net_epc: numOrNull(p.net_epc),
+    updated_at: updatedAt,
+    remittance: {
+      id: strOrNull(r.id),
+      payment_date: strOrNull(r.payment_date),
+      customer_name: strOrNull(r.customer_name),
+      status: strOrNull(r.status),
+      payment_status: strOrNull(r.payment_status),
+      sales_partner: strOrNull(r.sales_partner),
+      sales_advisor: strOrNull(r.sales_advisor),
+      channel: strOrNull(r.channel),
+      latest_contract: strOrNull(r.latest_contract),
+      contract_date: strOrNull(r.contract_date),
+      finance_type: strOrNull(r.finance_type),
+      financier: strOrNull(r.financier),
+      utility_provider: strOrNull(r.utility_provider),
+      pv_size: numOrNull(r.pv_size),
+      redline_price_tier: numOrNull(r.redline_price_tier),
+      contract_amount: numOrNull(r.contract_amount),
+      gross_ppw: numOrNull(r.gross_ppw),
+      finance_fee: numOrNull(r.finance_fee),
+      cash_deal_value: numOrNull(r.cash_deal_value),
+      battery_price: numOrNull(r.battery_price),
+      adder_amount: numOrNull(r.adder_amount),
+      contract_adder_detail: strOrNull(r.contract_adder_detail),
+      post_sale_adder_work_order: numOrNull(r.post_sale_adder_work_order),
+      post_sale_adders: numOrNull(r.post_sale_adders),
+      pv_only_price: numOrNull(r.pv_only_price),
+      ppw: numOrNull(r.ppw),
+      down_payment: numOrNull(r.down_payment),
+      spif: numOrNull(r.spif),
+      tpo_rebate: numOrNull(r.tpo_rebate),
+      etqa: numOrNull(r.etqa),
+      enfin_dca: numOrNull(r.enfin_dca),
+      light_reach_dca: numOrNull(r.light_reach_dca),
+      partner_commission: numOrNull(r.partner_commission),
+      partner_incentive: numOrNull(r.partner_incentive),
+      re_payment: numOrNull(r.re_payment),
+      c0: numOrNull(r.c0),
+      c1: numOrNull(r.c1),
+      c2: numOrNull(r.c2),
+      adjusted_c2: numOrNull(r.adjusted_c2),
+      c0_paid: numOrNull(r.c0_paid),
+      c1_paid: numOrNull(r.c1_paid),
+      c2_paid: numOrNull(r.c2_paid),
+      incentive_paid: numOrNull(r.incentive_paid),
+      clawback: numOrNull(r.clawback),
+      others: numOrNull(r.others),
+      total_sp_paid: numOrNull(r.total_sp_paid),
+      payment_this_week: numOrNull(r.payment_this_week),
+      imported_at: strOrNull(r.imported_at),
+    },
+  };
+}
+
+async function listEndpointProjects(): Promise<ProjectWithRemittance[]> {
+  const rows = await listAllPublicDeals();
+  return rows.map(mapPublicDealRow);
+}
+
 const REMITTANCE_MERGE_COLUMNS =
   "id, project_id, payment_date, customer_name, status, payment_status, sales_partner, sales_advisor, channel, latest_contract, contract_date, finance_type, financier, utility_provider, pv_size, redline_price_tier, contract_amount, gross_ppw, finance_fee, cash_deal_value, battery_price, adder_amount, contract_adder_detail, post_sale_adder_work_order, post_sale_adders, pv_only_price, ppw, down_payment, spif, tpo_rebate, etqa, enfin_dca, light_reach_dca, partner_commission, partner_incentive, re_payment, c0, c1, c2, adjusted_c2, c0_paid, c1_paid, c2_paid, incentive_paid, clawback, others, total_sp_paid, payment_this_week, imported_at";
 
@@ -199,135 +308,95 @@ export async function listProjectsPaged(opts: {
   sortDir?: string;
   userEmail?: string;
 }): Promise<{ rows: ProjectWithRemittance[]; total: number }> {
-  const db = createServerSupabase();
   const page = Math.max(1, opts.page);
-  const from = (page - 1) * opts.pageSize;
-  const to = from + opts.pageSize - 1;
   const { column, ascending } = parseProjectSort(opts.sort, opts.sortDir);
   const columnFilters = opts.columnFilters ?? { advanced: {}, multiSelect: {} };
   const { advanced, multiSelect } = columnFilters;
+  let rows = await listEndpointProjects();
 
-  const remittanceProjectIds = await projectIdsMatchingRemittanceFilters(
-    db,
-    advanced,
-    ALL_COLUMN_FILTER_DEFS
-  );
-
-  if (remittanceProjectIds && remittanceProjectIds.size === 0) {
-    return { rows: [], total: 0 };
-  }
-
-  const applyFilters = <Q extends { eq: Function; or: Function; ilike: Function; in: Function }>(
-    query: Q
-  ): Q => {
-    let q = query;
-
-    if (remittanceProjectIds) {
-      q = q.in("id", [...remittanceProjectIds]) as Q;
-    }
-
-    if (opts.userEmail) {
-      q = q.or(
-        `setter_email.ilike.${opts.userEmail},closer_email.ilike.${opts.userEmail},sales_advisor_email.ilike.${opts.userEmail}`
-      ) as Q;
-    }
-
-    if (opts.search) {
-      q = q.or(
-        `project_id.ilike.%${opts.search}%,opportunity_name.ilike.%${opts.search}%,email.ilike.%${opts.search}%,phone.ilike.%${opts.search}%`
-      ) as Q;
-    }
-
-    if (opts.installer?.trim() && !advanced.installer) {
-      q = q.eq("installer", opts.installer.trim()) as Q;
-    }
-    if (opts.setter?.trim() && !multiSelect.setter_name?.length && !advanced.setter_name) {
-      q = q.ilike("setter_name", `%${opts.setter.trim()}%`) as Q;
-    }
-    if (
-      opts.salesRep?.trim() &&
-      !multiSelect.sales_rep?.length &&
-      !advanced.sales_rep
-    ) {
-      const value = opts.salesRep.trim();
-      q = q.or(
-        `closer_name.ilike.%${value}%,sales_advisor_name.ilike.%${value}%,setter_name.ilike.%${value}%`
-      ) as Q;
-    }
-    if (opts.status?.trim() && !advanced.project_stage) {
-      q = q.ilike("project_stage", `%${opts.status.trim()}%`) as Q;
-    }
-
-    if (multiSelect.setter_name?.length) {
-      q = applySetterMultiSelectFilter(q as never, multiSelect.setter_name) as Q;
-    }
-    if (multiSelect.sales_rep?.length) {
-      q = applySalesRepMultiSelectFilter(q as never, multiSelect.sales_rep) as Q;
-    }
-
-    for (const def of ALL_COLUMN_FILTER_DEFS) {
-      if (def.id === "setter_name" && multiSelect.setter_name?.length) continue;
-      if (def.id === "sales_rep" && multiSelect.sales_rep?.length) continue;
-      const filter = advanced[def.id];
-      if (!filter || !isColumnFilterActive(filter)) continue;
-      if (def.source === "projects" && def.dbColumn) {
-        q = applyProjectColumnFilter(q as never, def.dbColumn, filter) as Q;
-      } else if (def.source === "sales_rep") {
-        q = applySalesRepFilter(q as never, filter) as Q;
-      }
-    }
-
-    return q;
+  const contains = (value: unknown, needle: string) =>
+    String(value ?? "").toLowerCase().includes(needle.toLowerCase());
+  const salesRepValue = (row: ProjectWithRemittance) =>
+    row.closer_name || row.sales_advisor_name || row.setter_name || "";
+  const cellValue = (row: ProjectWithRemittance, id: string) => {
+    if (id === "sales_rep") return salesRepValue(row);
+    const def = columnDefById(id);
+    if (def?.source === "remittance") return row.remittance?.[id as keyof RemittanceSummary];
+    return row[id as keyof ProjectWithRemittance];
   };
 
-  const dataQuery = applyFilters(
-    db
-      .from("projects")
-      .select("*")
-      .order(column, { ascending })
-      .range(from, to)
-  );
-
-  const countQuery = applyFilters(
-    db.from("projects").select("id", { count: "exact", head: true })
-  );
-
-  const [{ data, error }, { count, error: countError }] = await Promise.all([
-    dataQuery,
-    countQuery,
-  ]);
-
-  if (error) {
-    if (error.message.includes("projects")) return { rows: [], total: 0 };
-    throw new Error(error.message);
-  }
-  if (countError) {
-    if (countError.message.includes("projects")) return { rows: [], total: 0 };
-    throw new Error(countError.message);
+  if (opts.userEmail) {
+    rows = rows.filter((row) =>
+      [row.setter_email, row.closer_email, row.sales_advisor_email].some((v) =>
+        contains(v, opts.userEmail!),
+      ),
+    );
   }
 
-  const rows = await attachRemittance(db, (data ?? []) as Project[]);
-  return { rows, total: count ?? 0 };
+  if (opts.search?.trim()) {
+    const q = opts.search.trim();
+    rows = rows.filter((row) =>
+      [row.project_id, row.opportunity_name, row.email, row.phone].some((v) =>
+        contains(v, q),
+      ),
+    );
+  }
+
+  if (opts.installer?.trim() && !advanced.installer) {
+    rows = rows.filter((row) => row.installer === opts.installer!.trim());
+  }
+  if (opts.setter?.trim() && !multiSelect.setter_name?.length && !advanced.setter_name) {
+    rows = rows.filter((row) => contains(row.setter_name, opts.setter!.trim()));
+  }
+  if (opts.salesRep?.trim() && !multiSelect.sales_rep?.length && !advanced.sales_rep) {
+    rows = rows.filter((row) => contains(salesRepValue(row), opts.salesRep!.trim()));
+  }
+  if (opts.status?.trim() && !advanced.project_stage) {
+    rows = rows.filter((row) => contains(row.project_stage, opts.status!.trim()));
+  }
+
+  if (multiSelect.setter_name?.length) {
+    rows = rows.filter((row) => multiSelect.setter_name!.includes(row.setter_name ?? ""));
+  }
+  if (multiSelect.sales_rep?.length) {
+    rows = rows.filter((row) => multiSelect.sales_rep!.includes(salesRepValue(row)));
+  }
+
+  for (const [id, filter] of Object.entries(advanced)) {
+    if (!isColumnFilterActive(filter)) continue;
+    if (id === "setter_name" && multiSelect.setter_name?.length) continue;
+    if (id === "sales_rep" && multiSelect.sales_rep?.length) continue;
+    const def = columnDefById(id);
+    if (!def) continue;
+    rows = rows.filter((row) =>
+      matchesColumnFilter(cellValue(row, id), filter, def.kind),
+    );
+  }
+
+  rows = rows.sort((a, b) => {
+    const av = a[column as keyof ProjectWithRemittance];
+    const bv = b[column as keyof ProjectWithRemittance];
+    const an = typeof av === "number" ? av : Number.NaN;
+    const bn = typeof bv === "number" ? bv : Number.NaN;
+    let cmp: number;
+    if (!Number.isNaN(an) && !Number.isNaN(bn)) cmp = an - bn;
+    else cmp = String(av ?? "").localeCompare(String(bv ?? ""));
+    return ascending ? cmp : -cmp;
+  });
+
+  const total = rows.length;
+  const from = (page - 1) * opts.pageSize;
+  return { rows: rows.slice(from, from + opts.pageSize), total };
 }
 
 async function fetchProjectFilterValues(): Promise<ProjectFilterValues> {
-  const db = createServerSupabase();
-  const { data, error } = await db
-    .from("projects")
-    .select("setter_name, closer_name, sales_advisor_name, project_stage");
-
-  if (error) {
-    if (error.message.includes("projects")) {
-      return { setters: [], salesReps: [], statuses: [] };
-    }
-    throw new Error(error.message);
-  }
+  const data = await listEndpointProjects();
 
   const setters = new Set<string>();
   const salesReps = new Set<string>();
   const statuses = new Set<string>();
 
-  for (const row of data ?? []) {
+  for (const row of data) {
     const setter = row.setter_name ? String(row.setter_name).trim() : "";
     const closer = row.closer_name ? String(row.closer_name).trim() : "";
     const advisor = row.sales_advisor_name ? String(row.sales_advisor_name).trim() : "";
@@ -355,14 +424,8 @@ export const listProjectFilterValues = unstable_cache(
 );
 
 export async function getProject(id: string) {
-  const db = createServerSupabase();
-  const { data, error } = await db
-    .from("projects")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data;
+  const rows = await listEndpointProjects();
+  return rows.find((row) => row.id === id || row.project_id === id) ?? null;
 }
 
 export async function listRemittance(limit = 500, search?: string) {

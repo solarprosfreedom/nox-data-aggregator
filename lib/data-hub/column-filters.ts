@@ -230,7 +230,7 @@ function matchesCondition(
   }
 }
 
-function matchesFilter(
+export function matchesColumnFilter(
   cell: unknown,
   filter: ColumnFilterState,
   kind: ColumnFilterKind
@@ -420,7 +420,7 @@ export async function projectIdsMatchingRemittanceFilters(
     let ok = true;
     for (const def of remittanceFilters) {
       const cell = row[def.dbColumn!];
-      if (!matchesFilter(cell, filters[def.id]!, def.kind)) {
+      if (!matchesColumnFilter(cell, filters[def.id]!, def.kind)) {
         ok = false;
         break;
       }

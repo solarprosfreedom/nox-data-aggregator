@@ -4,7 +4,15 @@ import { useState, useTransition, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { deleteProject } from "./actions";
 
-export default function DeleteProjectButton({ id, label }: { id: string; label: string }) {
+export default function DeleteProjectButton({
+  id,
+  label,
+  installer,
+}: {
+  id: string;
+  label: string;
+  installer?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +27,7 @@ export default function DeleteProjectButton({ id, label }: { id: string; label: 
   function handleDelete() {
     setError(null);
     startTransition(async () => {
-      const res = await deleteProject(id);
+      const res = await deleteProject(id, installer ?? undefined);
       if ("error" in res) {
         setError(res.error);
       } else {

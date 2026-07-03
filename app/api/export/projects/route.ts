@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { customerDisplayName, resolveStateCode } from "@/lib/data-hub/normalize";
+import { listProjectsPaged } from "@/lib/data-hub/queries";
+import {
+  legacyParamsToColumnFilters,
+  mergeColumnFilters,
+  parseColumnFilters,
+} from "@/lib/data-hub/column-filters";
 
 // Latest-remittance fields promoted onto each project row (prefixed in the CSV).
 const REMITTANCE_EXPORT_COLUMNS = [
@@ -31,61 +36,37 @@ function toCSV(rows: Record<string, unknown>[]): string {
 }
 
 export async function GET(request: NextRequest) {
-  const db = createServerSupabase();
-
   const { searchParams } = request.nextUrl;
   const q = searchParams.get("q") ?? undefined;
   const installer = searchParams.get("installer")?.trim() ?? "";
-  const PROJECT_EXPORT_COLUMNS =
-    "id, project_id, opportunity_name, first_name, last_name, email, phone, address_line1, city, state_code, postal_code, project_stage, contract_signed_date, total_system_cost, system_size_kw, sales_advisor_name, sales_advisor_email, setter_name, setter_email, closer_name, closer_email, market, team, region, division, dealer_name, office_name, installer, terros_account_id, sequifi_sale_id, updated_at";
-  const pageSize = 1000;
-  const projects: Record<string, unknown>[] = [];
-  let from = 0;
-  while (true) {
-    let query = db
-      .from("projects")
-      .select(PROJECT_EXPORT_COLUMNS)
-      .order("updated_at", { ascending: false })
-      .range(from, from + pageSize - 1);
+  const params: Record<string, string | undefined> = {};
+  for (const [key, value] of searchParams.entries()) params[key] = value;
+  const columnFilters = mergeColumnFilters(
+    parseColumnFilters(params),
+    legacyParamsToColumnFilters({
+      installer: installer || undefined,
+      setter: searchParams.get("setter") ?? undefined,
+      salesRep: searchParams.get("salesRep") ?? undefined,
+      status: searchParams.get("status") ?? undefined,
+    }),
+  );
 
-    if (q) {
-      query = query.or(
-        `project_id.ilike.%${q}%,opportunity_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`
-      );
-    }
-    if (installer) query = query.eq("installer", installer);
-
-    const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    const batch = (data ?? []) as Record<string, unknown>[];
-    projects.push(...batch);
-    if (batch.length < pageSize) break;
-    from += pageSize;
-  }
-
-  // Attach each project's latest remittance row (by imported_at).
-  const ids = projects.map((p) => p.id as string);
-  const latestRemit = new Map<string, Record<string, unknown>>();
-  if (ids.length) {
-    const chunkSize = 500;
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const { data: remitData } = await db
-        .from("remittance")
-        .select(`project_id, ${REMITTANCE_EXPORT_COLUMNS.join(", ")}`)
-        .in("project_id", chunk)
-        .order("imported_at", { ascending: false });
-      for (const row of (remitData ?? []) as unknown as Record<string, unknown>[]) {
-        const pid = row.project_id as string | null;
-        if (pid && !latestRemit.has(pid)) latestRemit.set(pid, row);
-      }
-    }
-  }
+  const { rows: projects } = await listProjectsPaged({
+    page: 1,
+    pageSize: 50000,
+    search: q,
+    installer: installer || undefined,
+    setter: searchParams.get("setter") ?? undefined,
+    salesRep: searchParams.get("salesRep") ?? undefined,
+    status: searchParams.get("status") ?? undefined,
+    columnFilters,
+    sort: "updated_at",
+    sortDir: "desc",
+  });
 
   const merged = projects.map((p, i) => {
-    const { id, ...rest } = p;
-    const remit = latestRemit.get(id as string);
+    const { id: _id, remittance, ...rest } = p;
+    const remit = remittance as Record<string, unknown> | null;
     const out: Record<string, unknown> = {
       row_number: i + 1,
       ...rest,

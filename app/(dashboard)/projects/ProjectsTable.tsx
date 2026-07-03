@@ -318,7 +318,11 @@ export async function ProjectsTable({
                     <td className="whitespace-nowrap px-2 py-2">
                       <div className="flex items-center gap-1">
                         <EditProjectDrawer project={p} />
-                        <DeleteProjectButton id={p.id} label={p.opportunity_name ?? p.project_id} />
+                        <DeleteProjectButton
+                          id={p.id}
+                          label={p.opportunity_name ?? p.project_id}
+                          installer={p.installer}
+                        />
                       </div>
                     </td>
                   )}

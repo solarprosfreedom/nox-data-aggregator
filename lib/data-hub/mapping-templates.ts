@@ -1,14 +1,10 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { mergeInstallerOptions } from "@/lib/data-hub/installers";
+import { listAllPublicDeals } from "@/lib/public-deals/client";
 
 export async function listInstallerNames(): Promise<string[]> {
-  const db = createServerSupabase();
-  const { data, error } = await db.from("projects").select("installer");
-  if (error) {
-    if (error.message.includes("projects")) return mergeInstallerOptions([]);
-    throw new Error(error.message);
-  }
-  const fromDb = (data ?? [])
+  const rows = await listAllPublicDeals();
+  const fromDb = rows
     .map((r) => (r.installer != null ? String(r.installer) : ""))
     .filter(Boolean);
   return mergeInstallerOptions(fromDb);

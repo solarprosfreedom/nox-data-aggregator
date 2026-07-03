@@ -16,6 +16,8 @@ import {
   parseCsv,
   rowsToRecords,
 } from "@/lib/csv/parse";
+import { REMITTANCE_FIELD_KEYS } from "@/lib/data-hub/field-mapper";
+import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
 
 export type ImportResult = {
   importId: string;
@@ -28,6 +30,14 @@ export type ImportResult = {
 };
 
 const PROJECT_LOOKUP_CHUNK = 200;
+
+function remittanceEndpointPatch(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (REMITTANCE_FIELD_KEYS.has(key)) out[key] = value;
+  }
+  return out;
+}
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -105,7 +115,7 @@ export async function processImport(options: {
 
         const { data: existing } = await db
           .from("projects")
-          .select("id")
+          .select("id, installer")
           .eq("project_id", mapped.project_id)
           .maybeSingle();
 
@@ -120,11 +130,51 @@ export async function processImport(options: {
             .update(projectUpdate)
             .eq("id", existing.id);
           if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
-          else updated++;
+          else {
+            updated++;
+            try {
+              await syncPublicDealFromHub({
+                installer:
+                  mapped.installer ??
+                  (existing.installer != null ? String(existing.installer) : null),
+                project: mapped,
+                source: {
+                  fileName,
+                  rowNumber: i + 2,
+                  rawRow: rows[i],
+                },
+              });
+            } catch (err) {
+              errorMessages.push(
+                `Row ${i + 2}: public deals sync — ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+            }
+          }
         } else {
           const { error } = await db.from("projects").insert(mapped);
           if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
-          else inserted++;
+          else {
+            inserted++;
+            try {
+              await syncPublicDealFromHub({
+                installer: mapped.installer,
+                project: mapped,
+                source: {
+                  fileName,
+                  rowNumber: i + 2,
+                  rawRow: rows[i],
+                },
+              });
+            } catch (err) {
+              errorMessages.push(
+                `Row ${i + 2}: public deals sync — ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+            }
+          }
         }
       }
     } else {
@@ -149,11 +199,12 @@ export async function processImport(options: {
 
       const hesCodes = [...new Set(pendingRows.map((r) => r.mapped.hes_code))];
       const projectIdByHes = new Map<string, string>();
+      const projectInstallerByHes = new Map<string, string | null>();
 
       for (const codeChunk of chunk(hesCodes, PROJECT_LOOKUP_CHUNK)) {
         const { data: projects, error: lookupErr } = await db
           .from("projects")
-          .select("id, project_id")
+          .select("id, project_id, installer")
           .in("project_id", codeChunk);
 
         if (lookupErr) {
@@ -163,6 +214,10 @@ export async function processImport(options: {
         for (const project of projects ?? []) {
           if (project.project_id && project.id) {
             projectIdByHes.set(project.project_id, project.id);
+            projectInstallerByHes.set(
+              project.project_id,
+              project.installer != null ? String(project.installer) : null,
+            );
           }
         }
       }
@@ -195,6 +250,7 @@ export async function processImport(options: {
 
       for (const { csvRowNumber, mapped } of pendingRows) {
         const projectId = projectIdByHes.get(mapped.hes_code) ?? null;
+        const projectInstaller = projectInstallerByHes.get(mapped.hes_code) ?? null;
         const rawRow = mapped.raw_row as Record<string, string>;
         if (projectId) {
           matched++;
@@ -226,6 +282,26 @@ export async function processImport(options: {
             continue;
           }
           updated++;
+          if (projectId) {
+            try {
+              await syncPublicDealFromHub({
+                installer: projectInstaller,
+                project: { project_id: mapped.hes_code },
+                remittance: remittanceEndpointPatch(patch),
+                source: {
+                  fileName,
+                  rowNumber: csvRowNumber,
+                  rawRow,
+                },
+              });
+            } catch (err) {
+              errorMessages.push(
+                `Row ${csvRowNumber}: public deals sync — ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+            }
+          }
           continue;
         }
 
@@ -238,6 +314,26 @@ export async function processImport(options: {
           continue;
         }
         inserted++;
+        if (projectId) {
+          try {
+            await syncPublicDealFromHub({
+              installer: projectInstaller,
+              project: { project_id: mapped.hes_code },
+              remittance: remittanceEndpointPatch(patch),
+              source: {
+                fileName,
+                rowNumber: csvRowNumber,
+                rawRow,
+              },
+            });
+          } catch (err) {
+            errorMessages.push(
+              `Row ${csvRowNumber}: public deals sync — ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+          }
+        }
       }
 
       if (affectedProjectIds.size > 0) {

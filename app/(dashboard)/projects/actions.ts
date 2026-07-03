@@ -9,6 +9,10 @@ import {
   type ProjectFormData,
 } from "@/lib/data-hub/project-edit-form";
 import { refreshNetEpcForProjects } from "@/lib/data-hub/remittance-project-sync";
+import {
+  deletePublicDealFromHub,
+  patchPublicDealFromHub,
+} from "@/lib/data-hub/public-deals-sync";
 
 export type { ProjectFormData };
 
@@ -25,6 +29,21 @@ function toDate(v: string): string | null {
 
 function str(v: string): string | null {
   return v.trim() || null;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function loadProjectForAction(
+  db: ReturnType<typeof createServerSupabase>,
+  id: string,
+) {
+  const query = db.from("projects").select("project_id, installer");
+  const { data, error } = isUuid(id)
+    ? await query.or(`id.eq.${id},project_id.eq.${id}`).maybeSingle()
+    : await query.eq("project_id", id).maybeSingle();
+  return { data, error };
 }
 
 async function saveLatestRemittance(
@@ -77,13 +96,13 @@ export async function updateProject(
   try {
     const db = createServerSupabase();
 
-    const { data: project, error: loadErr } = await db
-      .from("projects")
-      .select("project_id")
-      .eq("id", id)
-      .maybeSingle();
+    const { data: project, error: loadErr } = await loadProjectForAction(db, id);
     if (loadErr) return { error: loadErr.message };
-    if (!project?.project_id) return { error: "Project not found." };
+    const projectId = project?.project_id ? String(project.project_id) : id;
+    const installer =
+      project?.installer != null
+        ? String(project.installer)
+        : (form.installer?.trim() || null);
 
     const projectUpdate: Record<string, string | number | null> = {};
     for (const { key, type } of PROJECT_EDIT_FIELDS) {
@@ -97,13 +116,29 @@ export async function updateProject(
       }
     }
 
-    const { error } = await db.from("projects").update(projectUpdate).eq("id", id);
-    if (error) return { error: error.message };
+    if (project?.project_id) {
+      const { error } = await db.from("projects").update(projectUpdate).eq("project_id", projectId);
+      if (error) return { error: error.message };
 
-    const remittanceErr = await saveLatestRemittance(db, id, project.project_id, form);
-    if (remittanceErr) return { error: remittanceErr };
+      const remittanceErr = await saveLatestRemittance(db, id, projectId, form);
+      if (remittanceErr) return { error: remittanceErr };
+    }
 
-    await refreshNetEpcForProjects(db, [id]);
+    await patchPublicDealFromHub({
+      installer,
+      project: {
+        project_id: projectId,
+        ...projectUpdate,
+      },
+      remittance: remittanceFormHasValues(form)
+        ? {
+            payment_date: toDate(form.payment_date),
+            ...buildRemittanceUpdatePayload(form),
+          }
+        : {},
+    });
+
+    if (project?.project_id) await refreshNetEpcForProjects(db, [id]);
 
     revalidatePath("/projects");
     revalidatePath(`/projects/${id}`);
@@ -115,11 +150,24 @@ export async function updateProject(
 
 export async function deleteProject(
   id: string,
+  installerHint?: string,
 ): Promise<{ ok: true } | { error: string }> {
   try {
     const db = createServerSupabase();
-    const { error } = await db.from("projects").delete().eq("id", id);
-    if (error) return { error: error.message };
+    const { data: project, error: loadErr } = await loadProjectForAction(db, id);
+    if (loadErr) return { error: loadErr.message };
+    const projectId = project?.project_id ? String(project.project_id) : id;
+
+    await deletePublicDealFromHub({
+      installer:
+        project?.installer != null ? String(project.installer) : installerHint ?? null,
+      projectId,
+    });
+
+    if (project?.project_id) {
+      const { error } = await db.from("projects").delete().eq("project_id", projectId);
+      if (error) return { error: error.message };
+    }
     revalidatePath("/projects");
     return { ok: true };
   } catch (err) {

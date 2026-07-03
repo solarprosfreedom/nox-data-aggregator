@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { getProject } from "@/lib/data-hub/queries";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { computeGrossPpw, computeNetPpw, formatPpw } from "@/lib/data-hub/ppw";
 import { resolveProjectDisplay } from "@/lib/data-hub/project-field-resolution";
 import SystemSizeDisplay from "@/components/ui/SystemSizeDisplay";
@@ -60,20 +59,8 @@ export async function ProjectDetailContent({ id }: { id: string }) {
   const project = await getProject(id);
   if (!project) notFound();
 
-  const db = createServerSupabase();
-  const { data: remittanceRows, error: remittanceErr } = await db
-    .from("remittance")
-    .select(
-      "payment_date, payment_this_week, total_sp_paid, status, customer_name, sales_advisor, sales_partner, contract_date, pv_size, contract_amount, battery_price, adder_amount, imported_at",
-    )
-    .eq("project_id", id)
-    .order("imported_at", { ascending: false })
-    .limit(10);
-
-  const remittance =
-    remittanceErr?.message.includes("remittance") ? [] : (remittanceRows ?? []);
-
   const p = project as Record<string, unknown>;
+  const remittance = project.remittance ? [project.remittance] : [];
   const latestRemit = remittance[0] as Record<string, unknown> | undefined;
   const resolved = resolveProjectDisplay(
     p as Parameters<typeof resolveProjectDisplay>[0],

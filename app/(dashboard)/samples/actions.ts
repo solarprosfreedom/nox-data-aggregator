@@ -18,6 +18,7 @@ import {
   syncProjectPersonalInfoFromImport,
   type ProjectPersonalInfoSync,
 } from "@/lib/data-hub/project-personal-sync";
+import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
 
 export type UploadSampleResult =
   | { ok: true; id: string; rowCount: number; columnCount: number }
@@ -169,7 +170,7 @@ export async function importWithMapping(
 
     const { data: existing } = await db
       .from("projects")
-      .select("id")
+      .select("id, installer")
       .eq("project_id", normalizedProjectId)
       .maybeSingle();
 
@@ -256,6 +257,28 @@ export async function importWithMapping(
           ...projectPersonalInfoFromImportPatches(projectPatch, remittancePatch),
         });
       }
+    }
+
+    try {
+      await syncPublicDealFromHub({
+        installer:
+          installer ??
+          (typeof projectPatch.installer === "string" ? projectPatch.installer : null) ??
+          (existing?.installer != null ? String(existing.installer) : null),
+        project: projectPatch,
+        remittance: remittancePatch,
+        source: {
+          fileName: String(fileName ?? "manual"),
+          rowNumber: i + 2,
+          rawRow: rows[i],
+        },
+      });
+    } catch (err) {
+      errorMessages.push(
+        `Row ${i + 2}: public deals sync — ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 
