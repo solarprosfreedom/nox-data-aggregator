@@ -126,9 +126,77 @@ function numOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function hasMeaningfulRemittanceValue(summary: RemittanceSummary): boolean {
+  return Object.entries(summary).some(([key, value]) => {
+    if (key === "id" || key === "imported_at") return false;
+    if (value == null) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    return true;
+  });
+}
+
+function mapPublicDealRemittance(
+  remittance: Record<string, unknown> | null,
+): RemittanceSummary | null {
+  if (!remittance) return null;
+  const r = remittance;
+  const summary: RemittanceSummary = {
+    id: strOrNull(r.id),
+    payment_date: strOrNull(r.payment_date),
+    customer_name: strOrNull(r.customer_name),
+    status: strOrNull(r.status),
+    payment_status: strOrNull(r.payment_status),
+    sales_partner: strOrNull(r.sales_partner),
+    sales_advisor: strOrNull(r.sales_advisor),
+    channel: strOrNull(r.channel),
+    latest_contract: strOrNull(r.latest_contract),
+    contract_date: strOrNull(r.contract_date),
+    finance_type: strOrNull(r.finance_type),
+    financier: strOrNull(r.financier),
+    utility_provider: strOrNull(r.utility_provider),
+    pv_size: numOrNull(r.pv_size),
+    redline_price_tier: numOrNull(r.redline_price_tier),
+    contract_amount: numOrNull(r.contract_amount),
+    gross_ppw: numOrNull(r.gross_ppw),
+    finance_fee: numOrNull(r.finance_fee),
+    cash_deal_value: numOrNull(r.cash_deal_value),
+    battery_price: numOrNull(r.battery_price),
+    adder_amount: numOrNull(r.adder_amount),
+    contract_adder_detail: strOrNull(r.contract_adder_detail),
+    post_sale_adder_work_order: numOrNull(r.post_sale_adder_work_order),
+    post_sale_adders: numOrNull(r.post_sale_adders),
+    pv_only_price: numOrNull(r.pv_only_price),
+    ppw: numOrNull(r.ppw),
+    down_payment: numOrNull(r.down_payment),
+    spif: numOrNull(r.spif),
+    tpo_rebate: numOrNull(r.tpo_rebate),
+    etqa: numOrNull(r.etqa),
+    enfin_dca: numOrNull(r.enfin_dca),
+    light_reach_dca: numOrNull(r.light_reach_dca),
+    partner_commission: numOrNull(r.partner_commission),
+    partner_incentive: numOrNull(r.partner_incentive),
+    re_payment: numOrNull(r.re_payment),
+    c0: numOrNull(r.c0),
+    c1: numOrNull(r.c1),
+    c2: numOrNull(r.c2),
+    adjusted_c2: numOrNull(r.adjusted_c2),
+    c0_paid: numOrNull(r.c0_paid),
+    c1_paid: numOrNull(r.c1_paid),
+    c2_paid: numOrNull(r.c2_paid),
+    incentive_paid: numOrNull(r.incentive_paid),
+    clawback: numOrNull(r.clawback),
+    others: numOrNull(r.others),
+    total_sp_paid: numOrNull(r.total_sp_paid),
+    payment_this_week: numOrNull(r.payment_this_week),
+    imported_at: strOrNull(r.imported_at),
+  };
+  return hasMeaningfulRemittanceValue(summary) ? summary : null;
+}
+
 export function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
   const p = row.project ?? {};
   const r = row.remittance ?? {};
+  const remittance = mapPublicDealRemittance(row.remittance);
   const projectId = strOrNull(p.project_id) ?? row.pk_value;
   const updatedAt =
     strOrNull(p.updated_at) ??
@@ -174,56 +242,7 @@ export function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
     cancel_date: strOrNull(p.cancel_date),
     net_epc: numOrNull(p.net_epc),
     updated_at: updatedAt,
-    remittance: {
-      id: strOrNull(r.id),
-      payment_date: strOrNull(r.payment_date),
-      customer_name: strOrNull(r.customer_name),
-      status: strOrNull(r.status),
-      payment_status: strOrNull(r.payment_status),
-      sales_partner: strOrNull(r.sales_partner),
-      sales_advisor: strOrNull(r.sales_advisor),
-      channel: strOrNull(r.channel),
-      latest_contract: strOrNull(r.latest_contract),
-      contract_date: strOrNull(r.contract_date),
-      finance_type: strOrNull(r.finance_type),
-      financier: strOrNull(r.financier),
-      utility_provider: strOrNull(r.utility_provider),
-      pv_size: numOrNull(r.pv_size),
-      redline_price_tier: numOrNull(r.redline_price_tier),
-      contract_amount: numOrNull(r.contract_amount),
-      gross_ppw: numOrNull(r.gross_ppw),
-      finance_fee: numOrNull(r.finance_fee),
-      cash_deal_value: numOrNull(r.cash_deal_value),
-      battery_price: numOrNull(r.battery_price),
-      adder_amount: numOrNull(r.adder_amount),
-      contract_adder_detail: strOrNull(r.contract_adder_detail),
-      post_sale_adder_work_order: numOrNull(r.post_sale_adder_work_order),
-      post_sale_adders: numOrNull(r.post_sale_adders),
-      pv_only_price: numOrNull(r.pv_only_price),
-      ppw: numOrNull(r.ppw),
-      down_payment: numOrNull(r.down_payment),
-      spif: numOrNull(r.spif),
-      tpo_rebate: numOrNull(r.tpo_rebate),
-      etqa: numOrNull(r.etqa),
-      enfin_dca: numOrNull(r.enfin_dca),
-      light_reach_dca: numOrNull(r.light_reach_dca),
-      partner_commission: numOrNull(r.partner_commission),
-      partner_incentive: numOrNull(r.partner_incentive),
-      re_payment: numOrNull(r.re_payment),
-      c0: numOrNull(r.c0),
-      c1: numOrNull(r.c1),
-      c2: numOrNull(r.c2),
-      adjusted_c2: numOrNull(r.adjusted_c2),
-      c0_paid: numOrNull(r.c0_paid),
-      c1_paid: numOrNull(r.c1_paid),
-      c2_paid: numOrNull(r.c2_paid),
-      incentive_paid: numOrNull(r.incentive_paid),
-      clawback: numOrNull(r.clawback),
-      others: numOrNull(r.others),
-      total_sp_paid: numOrNull(r.total_sp_paid),
-      payment_this_week: numOrNull(r.payment_this_week),
-      imported_at: strOrNull(r.imported_at),
-    },
+    remittance,
   };
 }
 
