@@ -21,6 +21,14 @@ export type PublicDealRow = {
   raw?: Record<string, unknown>;
 };
 
+type PublicDealsListResponse = {
+  data?: PublicDealRow[] | PublicDealRow | null;
+  hasMore?: boolean;
+  page?: number;
+  limit?: number;
+  total?: number;
+};
+
 const DEFAULT_BASE = "https://hub.noxpwr.com/api/public/deals";
 
 const INSTALLER_VENDOR_ALIASES: Array<[RegExp, PublicDealVendor]> = [
@@ -120,25 +128,36 @@ export async function listPublicDeals(vendor: PublicDealVendor, limit = 5000) {
     throw new Error("Missing PUBLIC_DEALS_API_KEY or DATA_HUB_API_KEY");
   }
 
-  const response = await fetch(
-    `${publicDealsBaseUrl()}/${vendor}?limit=${encodeURIComponent(String(limit))}`,
-    {
+  const rows: PublicDealRow[] = [];
+  let page = 1;
+
+  while (true) {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      page: String(page),
+    });
+    const response = await fetch(`${publicDealsBaseUrl()}/${vendor}?${params}`, {
       headers: {
         accept: "application/json",
         "x-api-key": key,
       },
       cache: "no-store",
-    },
-  );
+    });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Public deals ${vendor} GET failed (${response.status}): ${text}`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Public deals ${vendor} GET failed (${response.status}): ${text}`);
+    }
+
+    const body = (await response.json()) as PublicDealsListResponse;
+    const data = Array.isArray(body.data) ? body.data : body.data ? [body.data] : [];
+    rows.push(...data);
+
+    if (!body.hasMore || data.length === 0) break;
+    page = (body.page ?? page) + 1;
   }
 
-  const body = (await response.json()) as { data?: PublicDealRow[] | PublicDealRow | null };
-  if (Array.isArray(body.data)) return body.data;
-  return body.data ? [body.data] : [];
+  return rows;
 }
 
 export async function listAllPublicDeals(limitPerVendor = 5000) {
@@ -146,6 +165,23 @@ export async function listAllPublicDeals(limitPerVendor = 5000) {
     PUBLIC_DEAL_VENDORS.map((vendor) => listPublicDeals(vendor, limitPerVendor)),
   );
   return chunks.flat();
+}
+
+export function publicDealProjectId(row: PublicDealRow) {
+  const projectId = row.project?.project_id;
+  return typeof projectId === "string" && projectId.trim()
+    ? projectId.trim()
+    : row.pk_value;
+}
+
+export async function findPublicDealByProjectId(projectId: string) {
+  const needle = projectId.trim();
+  if (!needle) return null;
+  const rows = await listAllPublicDeals();
+  return (
+    rows.find((row) => publicDealProjectId(row) === needle || row.pk_value === needle) ??
+    null
+  );
 }
 
 export async function patchPublicDeal(

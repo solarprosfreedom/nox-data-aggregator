@@ -61,7 +61,7 @@ function UnitToggle({
             }}
             className={`px-1.5 py-1 transition-colors ${
               active
-                ? "bg-cyan-600 text-white"
+                ? "bg-orange-600 text-white"
                 : "text-slate-500 hover:bg-white hover:text-slate-700"
             }`}
           >

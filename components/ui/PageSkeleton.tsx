@@ -2,7 +2,7 @@ export default function PageSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <div className="space-y-4" aria-busy="true" aria-label="Loading">
       <div className="flex items-center gap-2 text-sm text-slate-500">
-        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-cyan-600" />
+        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-orange-600" />
         Loading…
       </div>
       <div className="animate-pulse space-y-4">

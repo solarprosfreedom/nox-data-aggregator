@@ -32,7 +32,7 @@ export default async function AppsPage() {
       description: "Import projects, Terros exports, and remittance files.",
       href: "/projects",
       enabled: apps.includes("nox-data-hub"),
-      color: "bg-cyan-600",
+      color: "bg-orange-600",
       internal: true,
     },
   // Always show under-development cards even without explicit access.

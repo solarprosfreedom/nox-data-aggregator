@@ -122,7 +122,7 @@ export async function ProjectsTable({
           </p>
           <Link
             href="/imports"
-            className="mt-4 inline-block text-sm font-medium text-cyan-700 hover:underline"
+            className="mt-4 inline-block text-sm font-medium text-orange-700 hover:underline"
           >
             Go to imports →
           </Link>
@@ -230,7 +230,7 @@ export async function ProjectsTable({
                   <TD mono>
                     <Link
                       href={`/projects/${p.id}`}
-                      className="text-cyan-700 hover:underline"
+                      className="text-orange-700 hover:underline"
                     >
                       {p.project_id}
                     </Link>

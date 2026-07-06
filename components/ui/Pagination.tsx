@@ -26,12 +26,12 @@ export default function Pagination({ total }: { total: number }) {
   const pageBtn = (p: number, isActive: boolean) =>
     `flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-sm transition-all active:scale-95 ${
       isActive
-        ? "border-cyan-500 bg-cyan-50 font-semibold text-cyan-700 shadow-sm"
+        ? "border-orange-500 bg-orange-50 font-semibold text-orange-700 shadow-sm"
         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
     }`;
 
   return (
-    <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 text-sm text-slate-600 sm:grid-cols-3">
+    <div className="grid grid-cols-1 items-center gap-2 px-4 py-2 text-sm text-slate-600 sm:grid-cols-3">
       <p className={`justify-self-center text-sm sm:justify-self-start ${isNavigating ? "text-slate-400" : "text-slate-500"}`}>
         {total === 0
           ? "0 items"

@@ -2,14 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ImportSource } from "@/lib/data-hub/normalize";
 import { mapProjectsSheetRow, mapRemittanceRow } from "@/lib/data-hub/mappers";
 import {
-  refreshNetEpcForProjects,
-} from "@/lib/data-hub/remittance-project-sync";
-import {
   buildProjectPersonalInfoSync,
-  syncProjectPersonalInfoFromImport,
-  type ProjectPersonalInfoSync,
 } from "@/lib/data-hub/project-personal-sync";
-import { omitEmptyPatchFields, remittanceUpsertPayload } from "@/lib/data-hub/remittance-upsert";
 import {
   findHeaderRowIndex,
   inferRemittancePaymentDate,
@@ -17,7 +11,15 @@ import {
   rowsToRecords,
 } from "@/lib/csv/parse";
 import { REMITTANCE_FIELD_KEYS } from "@/lib/data-hub/field-mapper";
-import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
+import {
+  patchPublicDealFromHub,
+  syncPublicDealFromHub,
+} from "@/lib/data-hub/public-deals-sync";
+import {
+  listAllPublicDeals,
+  publicDealProjectId,
+  type PublicDealRow,
+} from "@/lib/public-deals/client";
 
 export type ImportResult = {
   importId: string;
@@ -29,8 +31,6 @@ export type ImportResult = {
   errorMessages: string[];
 };
 
-const PROJECT_LOOKUP_CHUNK = 200;
-
 function remittanceEndpointPatch(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
@@ -39,12 +39,10 @@ function remittanceEndpointPatch(row: Record<string, unknown>): Record<string, u
   return out;
 }
 
-function chunk<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    out.push(items.slice(i, i + size));
-  }
-  return out;
+function indexEndpointRows(rows: PublicDealRow[]) {
+  const byProjectId = new Map<string, PublicDealRow>();
+  for (const row of rows) byProjectId.set(publicDealProjectId(row), row);
+  return byProjectId;
 }
 
 export async function processImport(options: {
@@ -101,6 +99,7 @@ export async function processImport(options: {
     source === "remittance"
       ? inferRemittancePaymentDate(content, fileName)
       : null;
+  const endpointByProjectId = indexEndpointRows(await listAllPublicDeals());
 
   try {
     if (source === "projects_sheet") {
@@ -113,73 +112,45 @@ export async function processImport(options: {
 
         if (batchInstaller) mapped.installer = batchInstaller;
 
-        const { data: existing } = await db
-          .from("projects")
-          .select("id, installer")
-          .eq("project_id", mapped.project_id)
-          .maybeSingle();
+        const existing = endpointByProjectId.get(mapped.project_id);
+        const installerForRow = mapped.installer ?? existing?.installer ?? null;
+        if (!installerForRow) {
+          errorMessages.push(`Row ${i + 2}: installer is required for endpoint import`);
+          continue;
+        }
 
-        if (existing) {
-          const { project_id: _pid, ...rest } = mapped;
-          const projectUpdate = omitEmptyPatchFields(rest);
-          if (Object.keys(projectUpdate).length === 0) continue;
-
-          projectUpdate.updated_at = new Date().toISOString();
-          const { error } = await db
-            .from("projects")
-            .update(projectUpdate)
-            .eq("id", existing.id);
-          if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
-          else {
-            updated++;
-            try {
-              await syncPublicDealFromHub({
-                installer:
-                  mapped.installer ??
-                  (existing.installer != null ? String(existing.installer) : null),
-                project: mapped,
-                source: {
-                  fileName,
-                  rowNumber: i + 2,
-                  rawRow: rows[i],
-                },
-              });
-            } catch (err) {
-              errorMessages.push(
-                `Row ${i + 2}: public deals sync — ${
-                  err instanceof Error ? err.message : String(err)
-                }`,
-              );
-            }
-          }
-        } else {
-          const { error } = await db.from("projects").insert(mapped);
-          if (error) errorMessages.push(`Row ${i + 2}: ${error.message}`);
+        try {
+          await syncPublicDealFromHub({
+            installer: installerForRow,
+            project: mapped,
+            source: {
+              fileName,
+              rowNumber: i + 2,
+              rawRow: rows[i],
+            },
+          });
+          if (existing) updated++;
           else {
             inserted++;
-            try {
-              await syncPublicDealFromHub({
-                installer: mapped.installer,
-                project: mapped,
-                source: {
-                  fileName,
-                  rowNumber: i + 2,
-                  rawRow: rows[i],
-                },
-              });
-            } catch (err) {
-              errorMessages.push(
-                `Row ${i + 2}: public deals sync — ${
-                  err instanceof Error ? err.message : String(err)
-                }`,
-              );
-            }
+            endpointByProjectId.set(mapped.project_id, {
+              vendor: "axia",
+              installer: installerForRow,
+              pk: "project_id",
+              pk_value: mapped.project_id,
+              project: mapped,
+              remittance: null,
+            } as PublicDealRow);
           }
+        } catch (err) {
+          errorMessages.push(
+            `Row ${i + 2}: public deals sync — ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
         }
       }
     } else {
-      // remittance — batch project lookups and upserts (one row-at-a-time is very slow)
-      const affectedProjectIds = new Set<string>();
+      // Remittance imports patch existing Lovable endpoint rows by project id.
       const pendingRows: {
         csvRowNumber: number;
         mapped: NonNullable<ReturnType<typeof mapRemittanceRow>>;
@@ -197,148 +168,42 @@ export async function processImport(options: {
         pendingRows.push({ csvRowNumber, mapped });
       }
 
-      const hesCodes = [...new Set(pendingRows.map((r) => r.mapped.hes_code))];
-      const projectIdByHes = new Map<string, string>();
-      const projectInstallerByHes = new Map<string, string | null>();
-
-      for (const codeChunk of chunk(hesCodes, PROJECT_LOOKUP_CHUNK)) {
-        const { data: projects, error: lookupErr } = await db
-          .from("projects")
-          .select("id, project_id, installer")
-          .in("project_id", codeChunk);
-
-        if (lookupErr) {
-          throw new Error(`Project lookup failed: ${lookupErr.message}`);
-        }
-
-        for (const project of projects ?? []) {
-          if (project.project_id && project.id) {
-            projectIdByHes.set(project.project_id, project.id);
-            projectInstallerByHes.set(
-              project.project_id,
-              project.installer != null ? String(project.installer) : null,
-            );
-          }
-        }
-      }
-
-      const importedAt = new Date().toISOString();
-      const projectSyncUpdates: ProjectPersonalInfoSync[] = [];
-      const linkedProjectIds = [
-        ...new Set(
-          pendingRows
-            .map((r) => projectIdByHes.get(r.mapped.hes_code))
-            .filter((id): id is string => Boolean(id)),
-        ),
-      ];
-
-      const latestRemitIdByProject = new Map<string, string | number>();
-      for (const idChunk of chunk(linkedProjectIds, PROJECT_LOOKUP_CHUNK)) {
-        const { data: latestRows, error: latestErr } = await db.rpc(
-          "latest_remittance_for_projects",
-          { project_ids: idChunk },
-        );
-        if (latestErr) {
-          throw new Error(`Remittance lookup failed: ${latestErr.message}`);
-        }
-        for (const row of (latestRows ?? []) as { id?: string | number; project_id?: string }[]) {
-          if (row.project_id && row.id != null) {
-            latestRemitIdByProject.set(row.project_id, row.id);
-          }
-        }
-      }
-
       for (const { csvRowNumber, mapped } of pendingRows) {
-        const projectId = projectIdByHes.get(mapped.hes_code) ?? null;
-        const projectInstaller = projectInstallerByHes.get(mapped.hes_code) ?? null;
+        const existing = endpointByProjectId.get(mapped.hes_code) ?? null;
         const rawRow = mapped.raw_row as Record<string, string>;
-        if (projectId) {
+        if (!existing) {
+          errorMessages.push(
+            `Row ${csvRowNumber}: project ${mapped.hes_code} not found in public deals endpoint`,
+          );
+          continue;
+        }
+
+        const { projectId: _projectId, ...projectPatch } = buildProjectPersonalInfoSync(
+          mapped.hes_code,
+          rawRow,
+          mapped,
+        );
+
+        try {
+          await patchPublicDealFromHub({
+            installer: existing.installer,
+            project: { project_id: mapped.hes_code, ...projectPatch },
+            remittance: remittanceEndpointPatch(mapped),
+            source: {
+              fileName,
+              rowNumber: csvRowNumber,
+              rawRow,
+            },
+          });
           matched++;
-          affectedProjectIds.add(projectId);
-          projectSyncUpdates.push(
-            buildProjectPersonalInfoSync(projectId, rawRow, mapped),
+          updated++;
+        } catch (err) {
+          errorMessages.push(
+            `Row ${csvRowNumber}: public deals sync — ${
+              err instanceof Error ? err.message : String(err)
+            }`,
           );
         }
-
-        const patch = remittanceUpsertPayload({
-          ...mapped,
-          project_id: projectId,
-          file_name: fileName,
-          file_hash: fileHash,
-          imported_at: importedAt,
-        });
-
-        const latestRemitId = projectId
-          ? latestRemitIdByProject.get(projectId)
-          : undefined;
-
-        if (latestRemitId != null) {
-          const { error } = await db
-            .from("remittance")
-            .update(patch)
-            .eq("id", latestRemitId);
-          if (error) {
-            errorMessages.push(`Row ${csvRowNumber}: ${error.message}`);
-            continue;
-          }
-          updated++;
-          if (projectId) {
-            try {
-              await syncPublicDealFromHub({
-                installer: projectInstaller,
-                project: { project_id: mapped.hes_code },
-                remittance: remittanceEndpointPatch(patch),
-                source: {
-                  fileName,
-                  rowNumber: csvRowNumber,
-                  rawRow,
-                },
-              });
-            } catch (err) {
-              errorMessages.push(
-                `Row ${csvRowNumber}: public deals sync — ${
-                  err instanceof Error ? err.message : String(err)
-                }`,
-              );
-            }
-          }
-          continue;
-        }
-
-        const { error } = await db.from("remittance").insert({
-          ...patch,
-          row_number: csvRowNumber,
-        });
-        if (error) {
-          errorMessages.push(`Row ${csvRowNumber}: ${error.message}`);
-          continue;
-        }
-        inserted++;
-        if (projectId) {
-          try {
-            await syncPublicDealFromHub({
-              installer: projectInstaller,
-              project: { project_id: mapped.hes_code },
-              remittance: remittanceEndpointPatch(patch),
-              source: {
-                fileName,
-                rowNumber: csvRowNumber,
-                rawRow,
-              },
-            });
-          } catch (err) {
-            errorMessages.push(
-              `Row ${csvRowNumber}: public deals sync — ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-            );
-          }
-        }
-      }
-
-      if (affectedProjectIds.size > 0) {
-        await syncProjectPersonalInfoFromImport(db, projectSyncUpdates);
-        await refreshNetEpcForProjects(db, [...affectedProjectIds]);
       }
     }
 

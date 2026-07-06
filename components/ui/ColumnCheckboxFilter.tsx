@@ -17,7 +17,7 @@ function FilterIcon({ active }: { active: boolean }) {
       viewBox="0 0 14 14"
       fill="none"
       aria-hidden
-      className={`shrink-0 ${active ? "text-cyan-600" : "text-slate-400 group-hover:text-slate-600"}`}
+      className={`shrink-0 ${active ? "text-orange-600" : "text-slate-400 group-hover:text-slate-600"}`}
     >
       <path
         d="M1.5 2.5h11l-3.5 4v4l-4 1.5V6.5L1.5 2.5z"
@@ -160,16 +160,16 @@ export default function ColumnCheckboxFilter({
           }
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        className={`group relative inline-flex shrink-0 cursor-pointer items-center rounded p-0.5 transition-colors hover:bg-cyan-50 ${
+        className={`group relative inline-flex shrink-0 cursor-pointer items-center rounded p-0.5 transition-colors hover:bg-orange-50 ${
           active
-            ? "bg-cyan-50 text-cyan-600 ring-1 ring-cyan-200"
+            ? "bg-orange-50 text-orange-600 ring-1 ring-orange-200"
             : "text-slate-500 hover:text-slate-700"
         }`}
       >
         <FilterIcon active={active} />
         {active && (
           <span
-            className="pointer-events-none absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-cyan-500"
+            className="pointer-events-none absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-orange-500"
             aria-hidden
           />
         )}
@@ -194,7 +194,7 @@ export default function ColumnCheckboxFilter({
                   if (el) el.indeterminate = someSelected;
                 }}
                 onChange={toggleAll}
-                className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
               />
               <span className="text-sm font-medium text-slate-800">Select All</span>
             </label>
@@ -207,7 +207,7 @@ export default function ColumnCheckboxFilter({
                   type="checkbox"
                   checked={draft.has(name)}
                   onChange={() => toggleOne(name)}
-                  className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                  className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
                 />
                 <span className="truncate text-sm text-slate-700">{name}</span>
               </label>
@@ -225,7 +225,7 @@ export default function ColumnCheckboxFilter({
             <button
               type="button"
               onClick={applyFilter}
-              className="flex-1 rounded-md bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+              className="flex-1 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-700"
             >
               Filter
             </button>

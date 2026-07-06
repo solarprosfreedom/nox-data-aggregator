@@ -17,7 +17,7 @@ export async function SampleDetailContent({ id }: { id: string }) {
     <div>
       <Link
         href="/samples"
-        className="text-sm text-cyan-700 hover:underline"
+        className="text-sm text-orange-700 hover:underline"
       >
         ← All samples
       </Link>

@@ -36,7 +36,7 @@ function FilterSelect({
           id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-10 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+          className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-10 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
         >
           <option value="">All</option>
           {options.map((option) => (
@@ -86,12 +86,12 @@ export default function PeopleStatusFilters({ setters, salesReps, statuses }: Pr
         aria-expanded={expanded}
         aria-controls="people-status-filters-panel"
         onClick={() => setExpanded((prev) => !prev)}
-        className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+        className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
       >
         <IconFilter size={16} className="text-slate-500" />
         Filters
         {activeCount > 0 && (
-          <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-semibold text-cyan-700">
+          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
             {activeCount}
           </span>
         )}

@@ -21,7 +21,7 @@ function TableLoadingOverlay({ message }: { message: string }) {
       aria-busy="true"
       aria-label={message}
     >
-      <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-slate-200 border-t-cyan-600" />
+      <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-slate-200 border-t-orange-600" />
       <span className="text-sm font-medium text-slate-600">{message}</span>
     </div>
   );
@@ -64,7 +64,7 @@ function ProjectsListBody({
         style={{ height: TABLE_PANEL_HEIGHT }}
       >
         <div
-          className={`min-h-0 flex-1 overflow-auto transition-opacity duration-150 ${
+          className={`thin-scrollbar min-h-0 flex-1 overflow-auto transition-opacity duration-150 ${
             isNavigating ? "pointer-events-none opacity-40" : ""
           }`}
         >

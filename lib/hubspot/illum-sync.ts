@@ -3,6 +3,8 @@ import {
   inferCaliforniaStateFromZip,
   parseStateCode,
 } from "@/lib/data-hub/normalize";
+import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
+import { listAllPublicDeals, publicDealProjectId } from "@/lib/public-deals/client";
 
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 const DEFAULT_PAGE_SIZE = 100;
@@ -411,30 +413,26 @@ async function saveSyncState(
 }
 
 async function fetchExistingProjectIds(projectIds: string[]): Promise<Set<string>> {
-  const db = createServerSupabase();
-  const existing = new Set<string>();
-  for (let i = 0; i < projectIds.length; i += UPSERT_CHUNK_SIZE) {
-    const chunk = projectIds.slice(i, i + UPSERT_CHUNK_SIZE);
-    const { data, error } = await db
-      .from("projects")
-      .select("project_id")
-      .in("project_id", chunk);
-    if (error) throw new Error(error.message);
-    for (const row of data ?? []) {
-      const id = (row as { project_id: string | null }).project_id;
-      if (id) existing.add(id);
-    }
-  }
-  return existing;
+  const wanted = new Set(projectIds);
+  return new Set(
+    (await listAllPublicDeals())
+      .map(publicDealProjectId)
+      .filter((id) => wanted.has(id)),
+  );
 }
 
 async function upsertProjects(rows: Record<string, string | number | null>[]): Promise<void> {
   if (rows.length === 0) return;
-  const db = createServerSupabase();
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
     const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE).map(sanitizeRow);
-    const { error } = await db.from("projects").upsert(chunk, { onConflict: "project_id" });
-    if (error) throw new Error(error.message);
+    await Promise.all(
+      chunk.map((project) =>
+        syncPublicDealFromHub({
+          installer: typeof project.installer === "string" ? project.installer : "Illum",
+          project,
+        }),
+      ),
+    );
   }
 }
 

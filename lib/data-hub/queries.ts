@@ -43,6 +43,11 @@ export type Project = {
   installer: string | null;
   terros_account_id: string | null;
   sequifi_sale_id: string | null;
+  sequifi_job_status: string | null;
+  sequifi_synced_at: string | null;
+  setter_sequifi_employee_id: string | null;
+  closer_sequifi_employee_id: string | null;
+  cancel_date: string | null;
   net_epc: number | null;
   updated_at: string;
 };
@@ -121,7 +126,7 @@ function numOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
+export function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
   const p = row.project ?? {};
   const r = row.remittance ?? {};
   const projectId = strOrNull(p.project_id) ?? row.pk_value;
@@ -162,6 +167,11 @@ function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
     installer: strOrNull(p.installer) ?? row.installer,
     terros_account_id: strOrNull(p.terros_account_id),
     sequifi_sale_id: strOrNull(p.sequifi_sale_id),
+    sequifi_job_status: strOrNull(p.sequifi_job_status),
+    sequifi_synced_at: strOrNull(p.sequifi_synced_at),
+    setter_sequifi_employee_id: strOrNull(p.setter_sequifi_employee_id),
+    closer_sequifi_employee_id: strOrNull(p.closer_sequifi_employee_id),
+    cancel_date: strOrNull(p.cancel_date),
     net_epc: numOrNull(p.net_epc),
     updated_at: updatedAt,
     remittance: {
@@ -217,82 +227,22 @@ function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
   };
 }
 
-async function listEndpointProjects(): Promise<ProjectWithRemittance[]> {
+export async function listEndpointProjects(): Promise<ProjectWithRemittance[]> {
   const rows = await listAllPublicDeals();
   return rows.map(mapPublicDealRow);
 }
 
-const REMITTANCE_MERGE_COLUMNS =
-  "id, project_id, payment_date, customer_name, status, payment_status, sales_partner, sales_advisor, channel, latest_contract, contract_date, finance_type, financier, utility_provider, pv_size, redline_price_tier, contract_amount, gross_ppw, finance_fee, cash_deal_value, battery_price, adder_amount, contract_adder_detail, post_sale_adder_work_order, post_sale_adders, pv_only_price, ppw, down_payment, spif, tpo_rebate, etqa, enfin_dca, light_reach_dca, partner_commission, partner_incentive, re_payment, c0, c1, c2, adjusted_c2, c0_paid, c1_paid, c2_paid, incentive_paid, clawback, others, total_sp_paid, payment_this_week, imported_at";
-
-// Attaches the latest remittance row (by imported_at) to each project.
-async function attachRemittance(
-  db: ReturnType<typeof createServerSupabase>,
-  rows: Project[]
-): Promise<ProjectWithRemittance[]> {
-  if (rows.length === 0) return [];
-  const ids = rows.map((r) => r.id);
-
-  const { data: rpcData, error: rpcError } = await db.rpc(
-    "latest_remittance_for_projects",
-    { project_ids: ids }
-  );
-
-  if (!rpcError && rpcData) {
-    const byProject = new Map<string, RemittanceSummary>();
-    for (const raw of (rpcData ?? []) as Record<string, unknown>[]) {
-      const pid = raw.project_id as string | null;
-      if (pid && !byProject.has(pid)) {
-        const { project_id: _ignored, ...summary } = raw;
-        byProject.set(pid, summary as RemittanceSummary);
-      }
-    }
-    return rows.map((r) => ({ ...r, remittance: byProject.get(r.id) ?? null }));
-  }
-
-  const { data, error } = await db
-    .from("remittance")
-    .select(REMITTANCE_MERGE_COLUMNS)
-    .in("project_id", ids)
-    .order("imported_at", { ascending: false });
-
-  if (error) {
-    return rows.map((r) => ({ ...r, remittance: null }));
-  }
-
-  const byProject = new Map<string, RemittanceSummary>();
-  for (const raw of (data ?? []) as Record<string, unknown>[]) {
-    const pid = raw.project_id as string | null;
-    if (pid && !byProject.has(pid)) {
-      const { project_id: _ignored, ...summary } = raw;
-      byProject.set(pid, summary as RemittanceSummary);
-    }
-  }
-
-  return rows.map((r) => ({ ...r, remittance: byProject.get(r.id) ?? null }));
-}
-
 export async function listProjects(limit = 100, search?: string): Promise<Project[]> {
-  const db = createServerSupabase();
-  let query = db
-    .from("projects")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(limit);
-
-  if (search) {
-    query = query.or(
-      `project_id.ilike.%${search}%,opportunity_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
+  let rows = await listEndpointProjects();
+  if (search?.trim()) {
+    const q = search.trim().toLowerCase();
+    rows = rows.filter((row) =>
+      [row.project_id, row.opportunity_name, row.email, row.phone].some((value) =>
+        String(value ?? "").toLowerCase().includes(q),
+      ),
     );
   }
-
-  const { data, error } = await query;
-
-  if (error) {
-    if (error.message.includes("projects")) return [];
-    throw new Error(error.message);
-  }
-  return (data ?? []) as Project[];
+  return rows.slice(0, limit);
 }
 
 export async function listProjectsPaged(opts: {
@@ -429,26 +379,25 @@ export async function getProject(id: string) {
 }
 
 export async function listRemittance(limit = 500, search?: string) {
-  const db = createServerSupabase();
-  let query = db
-    .from("remittance")
-    .select("*")
-    .order("payment_date", { ascending: false })
-    .limit(limit);
+  let rows = (await listEndpointProjects())
+    .filter((project) => project.remittance)
+    .map((project) => ({
+      ...project.remittance,
+      hes_code: project.project_id,
+      project_id: project.project_id,
+      customer_name: project.remittance?.customer_name ?? project.opportunity_name,
+    }));
 
-  if (search) {
-    query = query.or(
-      `hes_code.ilike.%${search}%,customer_name.ilike.%${search}%`
+  if (search?.trim()) {
+    const q = search.trim().toLowerCase();
+    rows = rows.filter((row) =>
+      [row.hes_code, row.customer_name].some((value) =>
+        String(value ?? "").toLowerCase().includes(q),
+      ),
     );
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    if (error.message.includes("remittance")) return [];
-    throw new Error(error.message);
-  }
-  return data ?? [];
+  return rows.slice(0, limit);
 }
 
 export async function listImportHistory(limit = 50) {
@@ -467,10 +416,5 @@ export async function listImportHistory(limit = 50) {
 }
 
 export async function countProjects() {
-  const db = createServerSupabase();
-  const { count, error } = await db
-    .from("projects")
-    .select("*", { count: "exact", head: true });
-  if (error) return 0;
-  return count ?? 0;
+  return (await listEndpointProjects()).length;
 }

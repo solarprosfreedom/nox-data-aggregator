@@ -35,7 +35,7 @@ export default function SyncButton() {
           <button
             onClick={handleSync}
             disabled={pending}
-            className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+            className="rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
           >
             {pending ? (
               <span className="flex items-center gap-2">
@@ -69,10 +69,10 @@ export default function SyncButton() {
             <Stat label="Matched"              value={result.matched}          color="emerald" />
             <Stat label="Updated"              value={result.updated}          color="emerald" />
             <Stat label="Newly filled"         value={result.filled}           color="emerald" />
-            <Stat label="Changed existing"     value={result.changed}          color="cyan" />
-            <Stat label="Matched by email"     value={result.matchedByEmail}   color="cyan" />
-            <Stat label="Matched by phone"     value={result.matchedByPhone}   color="cyan" />
-            <Stat label="Matched by address"   value={result.matchedByAddress} color="cyan" />
+            <Stat label="Changed existing"     value={result.changed}          color="orange" />
+            <Stat label="Matched by email"     value={result.matchedByEmail}   color="orange" />
+            <Stat label="Matched by phone"     value={result.matchedByPhone}   color="orange" />
+            <Stat label="Matched by address"   value={result.matchedByAddress} color="orange" />
             <Stat label="No setter in Terros"  value={result.noSetterInTerros} color="amber" />
             <Stat label="No match found"       value={result.unmatched}        color="amber" />
             <Stat label="Errors"               value={result.errors}           color={result.errors > 0 ? "red" : "slate"} />
@@ -96,12 +96,12 @@ function Stat({
 }: {
   label: string;
   value: number;
-  color?: "slate" | "emerald" | "cyan" | "amber" | "red";
+  color?: "slate" | "emerald" | "orange" | "amber" | "red";
 }) {
   const colors = {
     slate:   "bg-slate-50 text-slate-700",
     emerald: "bg-emerald-50 text-emerald-800",
-    cyan:    "bg-cyan-50 text-cyan-800",
+    orange:    "bg-orange-50 text-orange-800",
     amber:   "bg-amber-50 text-amber-800",
     red:     "bg-red-50 text-red-800",
   };

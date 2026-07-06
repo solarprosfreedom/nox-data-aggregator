@@ -14,7 +14,7 @@ export default async function ProjectDetailPage({
 
   return (
     <div className="max-w-4xl">
-      <Link href="/projects" className="text-sm text-cyan-700 hover:underline">
+      <Link href="/projects" className="text-sm text-orange-700 hover:underline">
         ← Projects
       </Link>
 

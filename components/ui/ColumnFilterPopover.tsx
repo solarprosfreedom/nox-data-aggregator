@@ -15,7 +15,7 @@ function FilterIcon({ active }: { active: boolean }) {
       fill="none"
       aria-hidden
       className={`shrink-0 transition-colors ${
-        active ? "text-cyan-600" : "text-slate-400 group-hover:text-slate-600"
+        active ? "text-orange-600" : "text-slate-400 group-hover:text-slate-600"
       }`}
     >
       <path
@@ -115,14 +115,14 @@ export default function ColumnFilterPopover({
             });
           }}
           onMouseDown={(event) => event.stopPropagation()}
-          className={`group inline-flex shrink-0 cursor-pointer items-center rounded p-0.5 transition-colors hover:bg-cyan-50 ${
-            active ? "bg-cyan-50 text-cyan-600 ring-1 ring-cyan-200" : "text-slate-500 hover:text-slate-700"
+          className={`group inline-flex shrink-0 cursor-pointer items-center rounded p-0.5 transition-colors hover:bg-orange-50 ${
+            active ? "bg-orange-50 text-orange-600 ring-1 ring-orange-200" : "text-slate-500 hover:text-slate-700"
           }`}
         >
           <FilterIcon active={active} />
         </button>
         {active && (
-          <span className="pointer-events-none absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-cyan-500" aria-hidden />
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden />
         )}
       </span>
 
@@ -148,7 +148,7 @@ export default function ColumnFilterPopover({
                 setValue(event.target.value);
                 setOpen(false);
               }}
-              className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-9 text-sm text-slate-700 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+              className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-9 text-sm text-slate-700 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
             >
               <option value="">All</option>
               {options.map((option) => (

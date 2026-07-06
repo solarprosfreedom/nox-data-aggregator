@@ -57,7 +57,7 @@ export default function AdminClient({
         </p>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+          className="flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -91,7 +91,7 @@ export default function AdminClient({
                     title={u.id === currentUserId ? "Your own role" : `Click to switch to ${u.role === "admin" ? "member" : "admin"}`}
                     className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
                       u.role === "admin"
-                        ? "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                        ? "bg-orange-50 text-orange-700 hover:bg-orange-100"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     } ${u.id === currentUserId ? "cursor-default opacity-60" : "cursor-pointer"}`}
                   >
@@ -188,7 +188,7 @@ function AddUserModal({
               required
               autoFocus
               disabled={pending}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
             />
           </div>
 
@@ -200,7 +200,7 @@ function AddUserModal({
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Full name"
               disabled={pending}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
             />
           </div>
 
@@ -214,7 +214,7 @@ function AddUserModal({
                   onClick={() => setRole(r)}
                   className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
                     role === r
-                      ? "border-cyan-500 bg-cyan-50 text-cyan-700"
+                      ? "border-orange-500 bg-orange-50 text-orange-700"
                       : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
@@ -242,7 +242,7 @@ function AddUserModal({
             <button
               type="submit"
               disabled={pending || !email.trim()}
-              className="flex-1 rounded-lg bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+              className="flex-1 rounded-lg bg-orange-600 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
             >
               {pending ? "Adding…" : "Add user"}
             </button>

@@ -34,7 +34,7 @@ function FieldInput({
         type={type}
         value={value}
         onChange={(e) => onChange(fieldKey, e.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
       />
     </div>
   );
@@ -96,7 +96,7 @@ export default function EditProjectDrawer({ project }: { project: ProjectWithRem
           setError(null);
           setSuccess(false);
         }}
-        className="rounded p-1.5 text-slate-400 hover:bg-cyan-50 hover:text-cyan-700"
+        className="rounded p-1.5 text-slate-400 hover:bg-orange-50 hover:text-orange-700"
         title="Edit project"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -182,7 +182,7 @@ export default function EditProjectDrawer({ project }: { project: ProjectWithRem
                   <button
                     onClick={handleSave}
                     disabled={pending}
-                    className="flex-1 rounded-lg bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+                    className="flex-1 rounded-lg bg-orange-600 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
                   >
                     {pending ? "Saving…" : "Save changes"}
                   </button>

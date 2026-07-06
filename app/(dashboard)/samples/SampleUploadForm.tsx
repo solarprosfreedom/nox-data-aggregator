@@ -92,7 +92,7 @@ export default function SampleUploadForm() {
                 <span className="text-xs text-slate-400">Detecting…</span>
               )}
               {!detecting && autoDetected && (
-                <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-800">
+                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
                   Auto-detected
                 </span>
               )}
@@ -146,7 +146,7 @@ export default function SampleUploadForm() {
         <button
           type="submit"
           disabled={pending || detecting}
-          className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+          className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
         >
           {pending ? "Uploading…" : "Save sample"}
         </button>

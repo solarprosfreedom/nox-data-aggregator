@@ -47,7 +47,7 @@ export default async function ProjectsPage({
               <ExportCsvButton href={exportHref} />
               <Link
                 href="/imports"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-600 bg-cyan-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-orange-700"
               >
                 <IconUpload size={16} />
                 Import data

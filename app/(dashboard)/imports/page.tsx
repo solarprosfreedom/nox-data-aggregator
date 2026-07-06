@@ -4,13 +4,10 @@ import MappingForm from "../samples/MappingForm";
 import ImportsTabs from "./ImportsTabs";
 import PageHeader from "@/components/ui/PageHeader";
 import { IconHistory, IconImport } from "@/components/ui/icons";
-import { listInstallerNames, listMappingTemplates } from "@/lib/data-hub/mapping-templates";
+import { listInstallerNames } from "@/lib/data-hub/mapping-templates";
 
 export default async function ImportsPage() {
-  const [installers, templates] = await Promise.all([
-    listInstallerNames(),
-    listMappingTemplates(),
-  ]);
+  const installers = await listInstallerNames();
 
   return (
     <div className="max-w-4xl">
@@ -46,7 +43,7 @@ export default async function ImportsPage() {
               project or remittance fields in one step — existing projects are updated
               with whatever columns are in the file.
             </p>
-            <MappingForm installers={installers} initialTemplates={templates} />
+            <MappingForm installers={installers} initialTemplates={[]} />
           </div>
         }
       />

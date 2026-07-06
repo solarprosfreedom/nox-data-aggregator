@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseDate, parseNumeric, pickField } from "@/lib/csv/parse";
 import { customerDisplayName } from "@/lib/data-hub/normalize";
 import { omitEmptyPatchFields } from "@/lib/data-hub/remittance-upsert";
@@ -172,50 +171,10 @@ export function projectPersonalInfoFromImportPatches(
  * Projects table is SSOT — import only patches columns present in the file.
  */
 export async function syncProjectPersonalInfoFromImport(
-  db: SupabaseClient,
+  db: unknown,
   updates: ProjectImportSync[],
 ): Promise<number> {
-  const byProject = new Map<string, Record<string, string | number>>();
-
-  for (const update of updates) {
-    const { projectId, ...fields } = update;
-    if (!projectId) continue;
-
-    const entry = byProject.get(projectId) ?? {};
-
-    for (const key of STRING_SYNC_KEYS) {
-      const value = fields[key];
-      if (typeof value === "string" && value.trim()) {
-        entry[key] = value.trim();
-      }
-    }
-
-    for (const key of NUMBER_SYNC_KEYS) {
-      const value = fields[key];
-      if (value != null && Number.isFinite(Number(value))) {
-        entry[key] = Number(value);
-      }
-    }
-
-    byProject.set(projectId, entry);
-  }
-
-  if (byProject.size === 0) return 0;
-
-  const now = new Date().toISOString();
-  let updated = 0;
-
-  for (const [projectId, fields] of byProject) {
-    if (Object.keys(fields).length === 0) continue;
-
-    const { error } = await db
-      .from("projects")
-      .update({ ...fields, updated_at: now })
-      .eq("id", projectId);
-
-    if (error) throw new Error(error.message);
-    updated += 1;
-  }
-
-  return updated;
+  void db;
+  void updates;
+  return 0;
 }

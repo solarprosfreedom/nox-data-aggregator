@@ -377,57 +377,14 @@ export function applySalesRepMultiSelectFilter(
 }
 
 export async function projectIdsMatchingRemittanceFilters(
-  db: ReturnType<typeof import("@/lib/supabase/server").createServerSupabase>,
+  db: unknown,
   filters: ColumnFilterMap,
   defs: ColumnFilterDef[]
 ): Promise<Set<string> | null> {
-  const remittanceFilters = defs.filter(
-    (d) => d.source === "remittance" && filters[d.id] && isColumnFilterActive(filters[d.id])
-  );
-  if (remittanceFilters.length === 0) return null;
-
-  const columns = [
-    "project_id",
-    "payment_date",
-    ...remittanceFilters.map((d) => d.dbColumn!).filter(Boolean),
-  ];
-  const uniqueCols = [...new Set(columns)];
-
-  const latest = new Map<string, Record<string, unknown>>();
-  const pageSize = 1000;
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await db
-      .from("remittance")
-      .select(uniqueCols.join(", "))
-      .not("project_id", "is", null)
-      .order("imported_at", { ascending: false })
-      .range(from, from + pageSize - 1);
-
-    if (error) throw new Error(error.message);
-    const rows = (data ?? []) as unknown as Record<string, unknown>[];
-    for (const row of rows) {
-      const pid = row.project_id as string;
-      if (pid && !latest.has(pid)) latest.set(pid, row);
-    }
-    if (rows.length < pageSize) break;
-    from += pageSize;
-  }
-
-  const matching = new Set<string>();
-  for (const [projectId, row] of latest) {
-    let ok = true;
-    for (const def of remittanceFilters) {
-      const cell = row[def.dbColumn!];
-      if (!matchesColumnFilter(cell, filters[def.id]!, def.kind)) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) matching.add(projectId);
-  }
-  return matching;
+  void db;
+  void filters;
+  void defs;
+  return null;
 }
 
 export const PROJECT_TABLE_COLUMN_DEFS: ColumnFilterDef[] = [

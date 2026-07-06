@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { listEndpointProjects } from "@/lib/data-hub/queries";
 
 function verifyApiKey(request: NextRequest): boolean {
   const expected = process.env.DATA_HUB_API_KEY?.trim();
@@ -21,32 +21,25 @@ export async function GET(request: NextRequest) {
   const stage = searchParams.get("project_stage");
 
   const from = (page - 1) * perPage;
-  const to = from + perPage - 1;
 
   try {
-    const db = createServerSupabase();
-    let query = db
-      .from("projects")
-      .select(
-        "id, project_id, opportunity_name, first_name, last_name, email, phone, address_line1, city, state_code, postal_code, project_stage, contract_signed_date, sales_advisor_name, sales_advisor_email, setter_name, setter_email, closer_name, closer_email, total_system_cost, system_size_kw, terros_account_id, sequifi_sale_id, market, team, region, division, dealer_name, office_name, updated_at",
-        { count: "exact" }
-      )
-      .order("updated_at", { ascending: false })
-      .range(from, to);
+    let rows = await listEndpointProjects();
 
     if (updatedSince) {
-      query = query.gte("updated_at", updatedSince);
+      const cutoff = new Date(updatedSince).getTime();
+      if (!Number.isNaN(cutoff)) {
+        rows = rows.filter((row) => new Date(row.updated_at).getTime() >= cutoff);
+      }
     }
     if (stage) {
-      query = query.eq("project_stage", stage);
+      rows = rows.filter((row) => row.project_stage === stage);
     }
 
-    const { data, error, count } = await query;
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    rows = rows.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+    const total = rows.length;
+    const data = rows.slice(from, from + perPage);
 
-    const projects = (data ?? []).map((row) => {
+    const projects = data.map((row) => {
       const r = row as Record<string, unknown>;
       return {
         id: r.id,
@@ -100,7 +93,7 @@ export async function GET(request: NextRequest) {
       data: projects,
       page,
       per_page: perPage,
-      total: count ?? projects.length,
+      total,
     });
   } catch (err) {
     return NextResponse.json(

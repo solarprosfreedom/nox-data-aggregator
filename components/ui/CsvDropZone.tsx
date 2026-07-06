@@ -113,14 +113,14 @@ export default function CsvDropZone({
           disabled
             ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"
             : dragging
-              ? "border-cyan-500 bg-cyan-50"
+              ? "border-orange-500 bg-orange-50"
               : fileName
                 ? "border-emerald-300 bg-emerald-50/50"
-                : "border-slate-300 bg-slate-50 hover:border-cyan-400 hover:bg-cyan-50/40"
+                : "border-slate-300 bg-slate-50 hover:border-orange-400 hover:bg-orange-50/40"
         }`}
       >
         <svg
-          className={`mb-3 h-10 w-10 ${dragging ? "text-cyan-600" : "text-slate-400"}`}
+          className={`mb-3 h-10 w-10 ${dragging ? "text-orange-600" : "text-slate-400"}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"

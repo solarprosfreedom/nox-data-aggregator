@@ -36,7 +36,7 @@ export async function SamplesTable() {
               <td className="px-4 py-3">
                 <Link
                   href={`/samples/${sample.id}`}
-                  className="font-medium text-cyan-700 hover:underline"
+                  className="font-medium text-orange-700 hover:underline"
                 >
                   {sample.label}
                 </Link>

@@ -30,8 +30,8 @@ export default function SequifiSyncButton() {
         <p className="mt-1 text-sm text-slate-500">
           Links projects to Sequifi sales by PID then customer name, pushes app
           data to Sequifi (updates linked sales, creates missing ones), and pulls
-          Sequifi-only sales into the hub. Supabase is the source of truth. Run
-          Preview first to see what will change.
+          Sequifi-only sales into the hub. Installer endpoints are the source of
+          truth. Run Preview first to see what will change.
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -45,7 +45,7 @@ export default function SequifiSyncButton() {
           <button
             onClick={() => run(false)}
             disabled={pending}
-            className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+            className="rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
           >
             {pending && mode === "apply" ? (
               <span className="flex items-center gap-2">
@@ -85,7 +85,7 @@ export default function SequifiSyncButton() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Stat label={result.dryRun ? "Would update in Sequifi" : "Updated in Sequifi"} value={result.pushedUpdate} color="emerald" />
             <Stat label={result.dryRun ? "Would create in Sequifi" : "Created in Sequifi"} value={result.pushedNew} color="emerald" />
-            <Stat label={result.dryRun ? "Would pull into hub" : "Pulled into hub"} value={result.pulledNew} color="cyan" />
+            <Stat label={result.dryRun ? "Would pull into hub" : "Pulled into hub"} value={result.pulledNew} color="orange" />
             <Stat label="Linked to existing" value={result.linkedExisting} color="slate" />
             <Stat label="Ambiguous (skipped)" value={result.ambiguous} color="amber" />
             <Stat label="Missing fields (skipped)" value={result.skippedMissingFields} color="amber" />
@@ -132,12 +132,12 @@ function Stat({
 }: {
   label: string;
   value: number;
-  color?: "slate" | "emerald" | "cyan" | "amber" | "red";
+  color?: "slate" | "emerald" | "orange" | "amber" | "red";
 }) {
   const colors = {
     slate: "bg-slate-50 text-slate-700",
     emerald: "bg-emerald-50 text-emerald-800",
-    cyan: "bg-cyan-50 text-cyan-800",
+    orange: "bg-orange-50 text-orange-800",
     amber: "bg-amber-50 text-amber-800",
     red: "bg-red-50 text-red-800",
   };

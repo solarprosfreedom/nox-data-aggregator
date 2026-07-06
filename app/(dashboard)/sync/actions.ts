@@ -9,6 +9,8 @@ import {
   closerEmailFromRaw,
   type TerrosAccountRow,
 } from "@/lib/terros/matcher";
+import { listEndpointProjects } from "@/lib/data-hub/queries";
+import { patchPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
 
 export type SyncResult = {
   projectsScanned: number;
@@ -79,19 +81,12 @@ export async function syncSettersFromTerros(): Promise<SyncSettersResult> {
     stats.terrosAccounts = terrosAccounts.length;
     const index = buildIndex(terrosAccounts);
 
-    // 2. Load all projects.
-    const { data: projects, error: projectsErr } = await db
-      .from("projects")
-      .select(
-        "id, email, phone, address_line1, postal_code, setter_name, setter_email, closer_name, closer_email, terros_account_id"
-      )
-      .order("updated_at", { ascending: false });
-
-    if (projectsErr) return { error: projectsErr.message };
-    stats.projectsScanned = projects?.length ?? 0;
+    // 2. Load all endpoint projects.
+    const projects = await listEndpointProjects();
+    stats.projectsScanned = projects.length;
 
     // 3. Match each project and overwrite setter/closer from Terros on a hit.
-    for (const project of projects ?? []) {
+    for (const project of projects) {
       const result = matchProject(project, index);
       if (!result) {
         stats.unmatched++;
@@ -134,15 +129,20 @@ export async function syncSettersFromTerros(): Promise<SyncSettersResult> {
 
       const hadSetter = Boolean(project.setter_name?.trim());
 
-      const { error: updateErr } = await db
-        .from("projects")
-        .update(update)
-        .eq("id", project.id);
-
-      if (updateErr) {
+      try {
+        await patchPublicDealFromHub({
+          installer: project.installer,
+          project: {
+            project_id: project.project_id,
+            ...update,
+          },
+        });
+      } catch (err) {
         stats.errors++;
         if (stats.errorMessages.length < 10) {
-          stats.errorMessages.push(`${project.id}: ${updateErr.message}`);
+          stats.errorMessages.push(
+            `${project.project_id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
         continue;
       }

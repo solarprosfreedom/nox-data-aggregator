@@ -27,7 +27,7 @@ function FilterIcon({ active }: { active: boolean }) {
       viewBox="0 0 14 14"
       fill="none"
       aria-hidden
-      className={`shrink-0 ${active ? "text-cyan-600" : "text-slate-400 group-hover:text-slate-600"}`}
+      className={`shrink-0 ${active ? "text-orange-600" : "text-slate-400 group-hover:text-slate-600"}`}
     >
       <path
         d="M1.5 2.5h11l-3.5 4v4l-4 1.5V6.5L1.5 2.5z"
@@ -191,16 +191,16 @@ export default function ColumnAdvancedFilter({
           }
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        className={`group relative inline-flex shrink-0 cursor-pointer items-center rounded p-0.5 transition-colors hover:bg-cyan-50 ${
+        className={`group relative inline-flex shrink-0 cursor-pointer items-center rounded p-0.5 transition-colors hover:bg-orange-50 ${
           active
-            ? "bg-cyan-50 text-cyan-600 ring-1 ring-cyan-200"
+            ? "bg-orange-50 text-orange-600 ring-1 ring-orange-200"
             : "text-slate-500 hover:text-slate-700"
         }`}
       >
         <FilterIcon active={active} />
         {active && (
           <span
-            className="pointer-events-none absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-cyan-500"
+            className="pointer-events-none absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-orange-500"
             aria-hidden
           />
         )}
@@ -251,7 +251,7 @@ export default function ColumnAdvancedFilter({
             <button
               type="button"
               onClick={applyFilter}
-              className="flex-1 rounded-md bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700"
+              className="flex-1 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-700"
             >
               Filter
             </button>

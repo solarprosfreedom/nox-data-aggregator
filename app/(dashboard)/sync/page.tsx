@@ -21,7 +21,7 @@ export default function SyncPage() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-700">
             <IconDatabase size={16} />
           </span>
           <h2 className="text-base font-semibold text-slate-900">Sequifi</h2>

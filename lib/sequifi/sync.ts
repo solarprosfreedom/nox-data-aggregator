@@ -1,4 +1,3 @@
-import { createServerSupabase } from "@/lib/supabase/server";
 import {
   fetchAllSequifiSales,
   upsertSequifiSales,
@@ -12,7 +11,14 @@ import {
   repName,
 } from "@/lib/sequifi/matcher";
 import { buildSequifiUpsertRecord } from "@/lib/sequifi/build-upsert-record";
-import type { RemittanceSummary } from "@/lib/data-hub/queries";
+import {
+  listEndpointProjects,
+  type RemittanceSummary,
+} from "@/lib/data-hub/queries";
+import {
+  patchPublicDealFromHub,
+  syncPublicDealFromHub,
+} from "@/lib/data-hub/public-deals-sync";
 
 type ProjectRow = {
   id: string;
@@ -55,56 +61,7 @@ export type SequifiSyncResult = {
 
 export type SequifiSyncResponse = SequifiSyncResult | { error: string };
 
-const PROJECT_COLUMNS =
-  "id, project_id, opportunity_name, sequifi_sale_id, state_code, address_line1, postal_code, system_size_kw, total_system_cost, contract_signed_date, installer, project_stage, net_epc, setter_name, setter_email, closer_name, closer_email, sales_advisor_name, sales_advisor_email, setter_sequifi_employee_id, closer_sequifi_employee_id";
-
 const LINK_PARALLEL = 40;
-
-async function loadLatestRemittanceByProject(
-  db: ReturnType<typeof createServerSupabase>,
-  projectIds: string[],
-): Promise<Map<string, RemittanceSummary>> {
-  const out = new Map<string, RemittanceSummary>();
-  const chunkSize = 500;
-
-  for (let i = 0; i < projectIds.length; i += chunkSize) {
-    const chunk = projectIds.slice(i, i + chunkSize);
-    const { data, error } = await db.rpc("latest_remittance_for_projects", {
-      project_ids: chunk,
-    });
-    if (error) throw new Error(error.message);
-
-    for (const raw of (data ?? []) as Record<string, unknown>[]) {
-      const pid = raw.project_id as string | null;
-      if (pid && !out.has(pid)) {
-        const { project_id: _ignored, id: _id, ...summary } = raw;
-        out.set(pid, summary as RemittanceSummary);
-      }
-    }
-  }
-
-  return out;
-}
-
-async function loadAllProjects(
-  db: ReturnType<typeof createServerSupabase>,
-): Promise<ProjectRow[]> {
-  const all: ProjectRow[] = [];
-  const pageSize = 1000;
-  let from = 0;
-  while (true) {
-    const { data, error } = await db
-      .from("projects")
-      .select(PROJECT_COLUMNS)
-      .range(from, from + pageSize - 1);
-    if (error) throw new Error(error.message);
-    const rows = (data ?? []) as ProjectRow[];
-    all.push(...rows);
-    if (rows.length < pageSize) break;
-    from += pageSize;
-  }
-  return all;
-}
 
 function buildProjectFromSale(sale: SequifiSale): Record<string, unknown> {
   const row: Record<string, unknown> = {
@@ -129,9 +86,9 @@ function buildProjectFromSale(sale: SequifiSale): Record<string, unknown> {
 }
 
 async function linkPushedProjects(
-  db: ReturnType<typeof createServerSupabase>,
   pushApply: {
-    id: string;
+    projectId: string;
+    installer: string | null;
     pid: string;
     isNew: boolean;
     sequifi_job_status: string | null;
@@ -152,20 +109,28 @@ async function linkPushedProjects(
     const chunk = toLink.slice(i, i + LINK_PARALLEL);
     const results = await Promise.all(
       chunk.map(async (item) => {
-        const { error } = await db
-          .from("projects")
-          .update({
-            sequifi_sale_id: item.pid,
-            sequifi_job_status: item.sequifi_job_status,
-            sequifi_synced_at: syncedAt,
-          })
-          .eq("id", item.id);
-        return { item, error };
+        try {
+          await patchPublicDealFromHub({
+            installer: item.installer,
+            project: {
+              project_id: item.projectId,
+              sequifi_sale_id: item.pid,
+              sequifi_job_status: item.sequifi_job_status,
+              sequifi_synced_at: syncedAt,
+            },
+          });
+          return { item, error: null };
+        } catch (error) {
+          return {
+            item,
+            error: error instanceof Error ? error : new Error(String(error)),
+          };
+        }
       }),
     );
 
     for (const { item, error } of results) {
-      if (error) errors.push({ id: item.id, message: error.message });
+      if (error) errors.push({ id: item.projectId, message: error.message });
       else if (item.isNew) pushedNew++;
       else pushedUpdate++;
     }
@@ -195,14 +160,15 @@ export async function runSequifiSync({
   };
 
   try {
-    const db = createServerSupabase();
-    const projects = await loadAllProjects(db);
+    const projects = (await listEndpointProjects()) as Array<
+      ProjectRow & { remittance: RemittanceSummary | null }
+    >;
     result.projectsScanned = projects.length;
 
-    const remittanceByProject = await loadLatestRemittanceByProject(
-      db,
-      projects.map((p) => p.id),
-    );
+    const remittanceByProject = new Map<string, RemittanceSummary | null>();
+    for (const project of projects) {
+      if (project.project_id) remittanceByProject.set(project.project_id, project.remittance);
+    }
 
     const sales = await fetchAllSequifiSales();
     result.sequifiSales = sales.length;
@@ -216,7 +182,8 @@ export async function runSequifiSync({
 
     const pushRecords: SequifiUpsertRecord[] = [];
     const pushApply: {
-      id: string;
+      projectId: string;
+      installer: string | null;
       pid: string;
       isNew: boolean;
       sequifi_job_status: string | null;
@@ -237,7 +204,7 @@ export async function runSequifiSync({
           p,
           pid,
           false,
-          remittanceByProject.get(p.id) ?? null,
+          p.project_id ? remittanceByProject.get(p.project_id) ?? null : null,
         );
         if (!rec) {
           result.skippedMissingFields++;
@@ -245,7 +212,8 @@ export async function runSequifiSync({
         }
         pushRecords.push(rec);
         pushApply.push({
-          id: p.id,
+          projectId: p.project_id ?? p.id,
+          installer: p.installer,
           pid,
           isNew: false,
           sequifi_job_status: rec.job_status ?? m.sale.job_status,
@@ -260,7 +228,7 @@ export async function runSequifiSync({
               p,
               pid,
               true,
-              remittanceByProject.get(p.id) ?? null,
+              remittanceByProject.get(pid) ?? null,
             )
           : null;
         if (!pid || !rec) {
@@ -268,7 +236,13 @@ export async function runSequifiSync({
           continue;
         }
         pushRecords.push(rec);
-        pushApply.push({ id: p.id, pid, isNew: true, sequifi_job_status: rec.job_status ?? "Signed" });
+        pushApply.push({
+          projectId: pid,
+          installer: p.installer,
+          pid,
+          isNew: true,
+          sequifi_job_status: rec.job_status ?? "Signed",
+        });
         if (result.samples.create.length < 10) {
           result.samples.create.push(`${pid} (${p.opportunity_name})`);
         }
@@ -305,7 +279,6 @@ export async function runSequifiSync({
 
       const syncedAt = new Date().toISOString();
       const linked = await linkPushedProjects(
-        db,
         pushApply,
         outcome.succeededPids,
         syncedAt,
@@ -321,19 +294,22 @@ export async function runSequifiSync({
     }
 
     if (pullInserts.length) {
-      const chunkSize = 500;
-      for (let i = 0; i < pullInserts.length; i += chunkSize) {
-        const chunk = pullInserts.slice(i, i + chunkSize);
-        const { error: insErr } = await db
-          .from("projects")
-          .upsert(chunk, { onConflict: "project_id" });
-        if (insErr) {
+      for (const project of pullInserts) {
+        try {
+          await syncPublicDealFromHub({
+            installer: typeof project.installer === "string" ? project.installer : null,
+            project,
+          });
+          result.pulledNew++;
+        } catch (err) {
           result.errors++;
           if (result.errorMessages.length < 15) {
-            result.errorMessages.push(`pull batch ${i}: ${insErr.message}`);
+            result.errorMessages.push(
+              `pull ${String(project.project_id ?? "unknown")}: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
           }
-        } else {
-          result.pulledNew += chunk.length;
         }
       }
     }

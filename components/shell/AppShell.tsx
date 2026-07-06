@@ -39,7 +39,7 @@ function NavLinkInner({ label }: { label: string }) {
     <>
       <span>{label}</span>
       {pending && (
-        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-cyan-600" />
+        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-orange-600" />
       )}
     </>
   );
@@ -57,14 +57,14 @@ function NavItem({
       prefetch={true}
       className={`group flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
         active
-          ? "bg-cyan-50 text-cyan-900 ring-1 ring-cyan-100"
+          ? "bg-orange-50 text-orange-900 ring-1 ring-orange-100"
           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       }`}
     >
       <span
         className={`flex h-7 w-7 items-center justify-center rounded-md transition ${
           active
-            ? "bg-cyan-100 text-cyan-700"
+            ? "bg-orange-100 text-orange-700"
             : "bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-slate-700"
         }`}
       >

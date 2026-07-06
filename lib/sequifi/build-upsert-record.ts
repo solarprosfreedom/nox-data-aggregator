@@ -46,6 +46,19 @@ function round2(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
+function sumNums(...vals: (number | null | undefined)[]): number | null {
+  let total = 0;
+  let any = false;
+  for (const v of vals) {
+    const n = num(v);
+    if (n != null) {
+      total += n;
+      any = true;
+    }
+  }
+  return any ? total : null;
+}
+
 function closerName(project: ProjectForSequifiUpsert): string | null {
   return (
     project.closer_name?.trim() ||
@@ -124,6 +137,15 @@ export function buildSequifiUpsertRecord(
     if (remit.finance_fee != null) rec.dealer_fee_amount = remit.finance_fee;
     if (remit.finance_type?.trim()) rec.finance_type = remit.finance_type.trim();
     if (remit.financier?.trim()) rec.financier = remit.financier.trim();
+    if (remit.payment_status?.trim()) {
+      rec.payment_status = remit.payment_status.trim();
+    }
+
+    const totalCommission = sumNums(remit.c0, remit.c1, remit.c2);
+    if (totalCommission != null) rec.total_commission = totalCommission;
+
+    const totalPaid = sumNums(remit.c0_paid, remit.c1_paid, remit.c2_paid);
+    if (totalPaid != null) rec.total_paid_to_date = totalPaid;
   } else if (project.net_epc != null) {
     rec.net_epc = round2(num(project.net_epc)!);
   }

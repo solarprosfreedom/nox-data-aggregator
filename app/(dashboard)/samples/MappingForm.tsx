@@ -13,14 +13,11 @@ import {
 } from "@/lib/data-hub/field-mapper";
 import { parseCsv, rowsToRecords, findHeaderRowIndex } from "@/lib/csv/parse";
 import type { MappingTemplate } from "@/lib/data-hub/mapping-templates";
-import {
-  deleteMappingTemplate,
-  fetchMappingTemplates,
-  importWithMapping,
-  saveMappingTemplate,
-} from "./actions";
+import { importWithMapping } from "./actions";
 
 type Step = "upload" | "map" | "done";
+
+const LOCAL_TEMPLATE_KEY = "nox-data-hub:mapping-templates";
 
 type ImportResult = {
   inserted: number;
@@ -78,22 +75,36 @@ export default function MappingForm({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const schemaTemplates = useMemo(
-    () => templates.filter((t) => t.schema_type === "projects" || t.schema_type === "remittance"),
-    [templates],
+    () =>
+      templates.filter(
+        (t) =>
+          (t.schema_type === "projects" || t.schema_type === "remittance") &&
+          (!installer || !t.installer_name || t.installer_name === installer),
+      ),
+    [installer, templates],
   );
 
   useEffect(() => {
-    startTransition(async () => {
-      const res = await fetchMappingTemplates(undefined, installer || undefined);
-      if (Array.isArray(res)) {
+    try {
+      const raw = window.localStorage.getItem(LOCAL_TEMPLATE_KEY);
+      if (!raw) return;
+      const localTemplates = JSON.parse(raw) as MappingTemplate[];
+      if (Array.isArray(localTemplates)) {
         setTemplates(
-          res.sort(
+          localTemplates.sort(
             (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
           ),
         );
       }
-    });
-  }, [installer]);
+    } catch {
+      // Ignore malformed local template data.
+    }
+  }, []);
+
+  function persistTemplates(next: MappingTemplate[]) {
+    setTemplates(next);
+    window.localStorage.setItem(LOCAL_TEMPLATE_KEY, JSON.stringify(next));
+  }
 
   const handleFileSelect = useCallback(
     async (file: File) => {
@@ -176,45 +187,32 @@ export default function MappingForm({
 
   function handleSaveTemplate() {
     setSaveMessage(null);
-    const fd = new FormData();
-    fd.set("name", templateName.trim() || `${installer || "Generic"} mapping`);
-    fd.set("schema_type", "projects");
-    fd.set("installer_name", installer);
-    fd.set("column_map", JSON.stringify(resolvedColumnMap()));
-    if (selectedTemplateId) fd.set("id", selectedTemplateId);
-
-    startTransition(async () => {
-      const res = await saveMappingTemplate(fd);
-      if ("error" in res) {
-        setSaveMessage(res.error);
-        return;
-      }
-      setSelectedTemplateId(res.id);
-      setSaveMessage("Template saved.");
-      const refreshed = await fetchMappingTemplates(undefined, installer || undefined);
-      if (Array.isArray(refreshed)) {
-        setTemplates(
-          refreshed.sort(
-            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-          ),
-        );
-      }
-    });
+    const id = selectedTemplateId || `local-${Date.now()}`;
+    const now = new Date().toISOString();
+    const template: MappingTemplate = {
+      id,
+      name: templateName.trim() || `${installer || "Generic"} mapping`,
+      installer_name: installer || null,
+      schema_type: "projects",
+      column_map: resolvedColumnMap(),
+      created_at: templates.find((t) => t.id === id)?.created_at ?? now,
+    };
+    const next = [
+      template,
+      ...templates.filter((t) => t.id !== id),
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    persistTemplates(next);
+    setSelectedTemplateId(id);
+    setSaveMessage("Template saved on this browser.");
   }
 
   function handleDeleteTemplate() {
     if (!selectedTemplateId) return;
-    startTransition(async () => {
-      const res = await deleteMappingTemplate(selectedTemplateId);
-      if ("error" in res) {
-        setSaveMessage(res.error);
-        return;
-      }
-      setSelectedTemplateId("");
-      setTemplateName("");
-      setSaveMessage("Template deleted.");
-      setTemplates((prev) => prev.filter((t) => t.id !== selectedTemplateId));
-    });
+    const next = templates.filter((t) => t.id !== selectedTemplateId);
+    persistTemplates(next);
+    setSelectedTemplateId("");
+    setTemplateName("");
+    setSaveMessage("Template deleted.");
   }
 
   function reset() {
@@ -389,7 +387,7 @@ export default function MappingForm({
                       <select
                         value={selected}
                         onChange={(e) => handleMappingChange(header, e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                       >
                         <option value={SKIP}>— Skip —</option>
                         {fields.map((f) => (
@@ -445,7 +443,7 @@ export default function MappingForm({
             <button
               onClick={handleImport}
               disabled={pending || missingRequired.length > 0}
-              className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+              className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
             >
               {pending ? "Importing…" : "Import with this mapping"}
             </button>
@@ -485,7 +483,7 @@ export default function MappingForm({
             type="button"
             onClick={handleSaveTemplate}
             disabled={pending}
-            className="rounded-lg border border-cyan-600 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-50 disabled:opacity-60"
+            className="rounded-lg border border-orange-600 px-4 py-2 text-sm font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-60"
           >
             Save template
           </button>

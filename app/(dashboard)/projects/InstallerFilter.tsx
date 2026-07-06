@@ -1,25 +1,25 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { IconBuilding, IconChevronDown } from "@/components/ui/icons";
+import { useProjectsPager } from "./useProjectsPager";
 
 export default function InstallerFilter({
   installers,
 }: {
   installers: string[];
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { replaceSearchParams } = useProjectsPager();
   const current = searchParams.get("installer") ?? "";
 
   function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const next = e.target.value;
-    const params = new URLSearchParams(searchParams.toString());
-    if (next) params.set("installer", next);
-    else params.delete("installer");
-    params.delete("page");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    replaceSearchParams((params) => {
+      if (next) params.set("installer", next);
+      else params.delete("installer");
+      params.delete("page");
+    });
   }
 
   return (
@@ -31,7 +31,7 @@ export default function InstallerFilter({
       <select
         value={current}
         onChange={onChange}
-        className="h-10 min-w-[10rem] appearance-none rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+        className="h-10 min-w-[10rem] appearance-none rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
         aria-label="Filter by installer"
       >
         <option value="">All installers</option>

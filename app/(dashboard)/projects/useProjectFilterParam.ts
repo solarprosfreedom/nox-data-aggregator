@@ -1,22 +1,22 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useProjectsPager } from "./useProjectsPager";
 
 export type ProjectFilterParamKey = "setter" | "salesRep" | "status" | "installer";
 
 export function useProjectFilterParam(key: ProjectFilterParamKey) {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { replaceSearchParams } = useProjectsPager();
 
   const value = searchParams.get(key) ?? "";
 
   function setValue(next: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next) params.set(key, next);
-    else params.delete(key);
-    params.delete("page");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    replaceSearchParams((params) => {
+      if (next) params.set(key, next);
+      else params.delete(key);
+      params.delete("page");
+    });
   }
 
   return { value, setValue };

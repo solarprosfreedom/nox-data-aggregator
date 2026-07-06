@@ -1,6 +1,7 @@
 import {
   compactPublicDealObject,
   deletePublicDeal,
+  findPublicDealByProjectId,
   installerToPublicDealVendor,
   patchPublicDeal,
   putPublicDeal,
@@ -22,18 +23,21 @@ export async function syncPublicDealFromHub(input: PublicDealSyncInput) {
   const installer =
     input.installer ??
     (typeof input.project.installer === "string" ? input.project.installer : null);
-  const vendor = installerToPublicDealVendor(installer);
+  const project = compactPublicDealObject(input.project);
+  if (!project.project_id) {
+    throw new Error("Project ID is required for public deals sync");
+  }
+
+  const existing = !installer
+    ? await findPublicDealByProjectId(String(project.project_id))
+    : null;
+  const vendor = installerToPublicDealVendor(installer) ?? existing?.vendor ?? null;
   if (!vendor) {
     throw new Error(
       installer
         ? `No public deals vendor mapping for installer "${installer}"`
         : "Installer is required for public deals sync",
     );
-  }
-
-  const project = compactPublicDealObject(input.project);
-  if (!project.project_id) {
-    throw new Error("Project ID is required for public deals sync");
   }
 
   const remittance = input.remittance
@@ -57,7 +61,12 @@ export async function patchPublicDealFromHub(input: PublicDealSyncInput) {
   const installer =
     input.installer ??
     (typeof input.project.installer === "string" ? input.project.installer : null);
-  const vendor = installerToPublicDealVendor(installer);
+  const project = compactPublicDealObject(input.project);
+  const projectId = typeof project.project_id === "string" ? project.project_id.trim() : "";
+  if (!projectId) throw new Error("Project ID is required for public deals sync");
+
+  const existing = !installer ? await findPublicDealByProjectId(projectId) : null;
+  const vendor = installerToPublicDealVendor(installer) ?? existing?.vendor ?? null;
   if (!vendor) {
     throw new Error(
       installer
@@ -65,10 +74,6 @@ export async function patchPublicDealFromHub(input: PublicDealSyncInput) {
         : "Installer is required for public deals sync",
     );
   }
-
-  const project = compactPublicDealObject(input.project);
-  const projectId = typeof project.project_id === "string" ? project.project_id.trim() : "";
-  if (!projectId) throw new Error("Project ID is required for public deals sync");
 
   const payload: PublicDealPayload = {
     project,
@@ -89,7 +94,10 @@ export async function deletePublicDealFromHub(input: {
   installer?: string | null;
   projectId: string;
 }) {
-  const vendor = installerToPublicDealVendor(input.installer);
+  const existing = !input.installer
+    ? await findPublicDealByProjectId(input.projectId)
+    : null;
+  const vendor = installerToPublicDealVendor(input.installer) ?? existing?.vendor ?? null;
   if (!vendor) {
     throw new Error(
       input.installer

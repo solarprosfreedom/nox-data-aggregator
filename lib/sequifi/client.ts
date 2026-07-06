@@ -153,6 +153,9 @@ export type SequifiUpsertRecord = {
   dealer_fee_amount?: number | null;
   finance_type?: string | null;
   financier?: string | null;
+  payment_status?: string | null;
+  total_commission?: number | null;
+  total_paid_to_date?: number | null;
 };
 
 export type UpsertOutcome = {

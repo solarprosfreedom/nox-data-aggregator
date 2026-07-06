@@ -67,7 +67,7 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
           const label = IMPORT_SOURCE_LABELS[res.source as ImportSource] ?? res.source;
           const detail =
             res.source === "remittance"
-              ? `${res.inserted} rows saved, ${res.matched} linked to projects${res.errors ? `, ${res.errors} errors` : ""}.`
+              ? `${res.updated} endpoint rows updated, ${res.matched} linked to projects${res.errors ? `, ${res.errors} errors` : ""}.`
               : `${res.inserted} new, ${res.updated} updated${res.errors ? `, ${res.errors} errors` : ""}.`;
           setResult(`Imported ${res.rowCount} rows (${label}): ${detail}`);
           if (res.errorMessages.length) {
@@ -105,7 +105,7 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
               <span className="text-xs text-slate-400">Detecting…</span>
             )}
             {!detecting && autoDetected && (
-              <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-800">
+              <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
                 Auto-detected
               </span>
             )}
@@ -153,28 +153,28 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
         <button
           type="submit"
           disabled={pending || detecting}
-          className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+          className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
         >
           {pending ? "Importing…" : "Upload & import"}
         </button>
 
         {pending && (
           <div
-            className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-950"
+            className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-950"
             role="status"
             aria-live="polite"
           >
             <div className="flex items-center gap-2 font-medium">
               <span
-                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-cyan-600 border-t-transparent"
+                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent"
                 aria-hidden
               />
               {rowEstimate != null
                 ? `Importing ${rowEstimate} rows…`
                 : "Importing…"}
             </div>
-            <p className="mt-1 text-xs text-cyan-800">
-              Saving to the database and linking projects. Please keep this tab
+            <p className="mt-1 text-xs text-orange-800">
+              Saving to the installer endpoints. Please keep this tab
               open until the import finishes.
             </p>
           </div>

@@ -1,11 +1,8 @@
 import MappingForm from "./MappingForm";
-import { listInstallerNames, listMappingTemplates } from "@/lib/data-hub/mapping-templates";
+import { listInstallerNames } from "@/lib/data-hub/mapping-templates";
 
 export default async function FieldMapperPage() {
-  const [installers, templates] = await Promise.all([
-    listInstallerNames(),
-    listMappingTemplates(),
-  ]);
+  const installers = await listInstallerNames();
 
   return (
     <div className="max-w-4xl">
@@ -15,7 +12,7 @@ export default async function FieldMapperPage() {
         then import. Save mappings as templates to reuse on future imports.
       </p>
 
-      <MappingForm installers={installers} initialTemplates={templates} />
+      <MappingForm installers={installers} initialTemplates={[]} />
     </div>
   );
 }

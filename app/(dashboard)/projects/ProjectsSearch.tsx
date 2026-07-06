@@ -39,7 +39,7 @@ export default function ProjectsSearch() {
         defaultValue={searchParams.get("q") ?? ""}
         onChange={onInput}
         placeholder="Search name, ID, email, phone…"
-        className="h-10 w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm shadow-sm placeholder-slate-400 transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+        className="h-10 w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm shadow-sm placeholder-slate-400 transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
       />
     </div>
   );

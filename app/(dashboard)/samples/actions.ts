@@ -2,9 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth/profile";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { parseSampleCsvMetadata } from "@/lib/data-hub/samples";
-import type { SampleCsvSourceType } from "@/lib/data-hub/samples";
 import { parseCsv, rowsToRecords } from "@/lib/csv/parse";
 import {
   applyMapping,
@@ -15,83 +12,23 @@ import {
 import type { MappingTemplate } from "@/lib/data-hub/mapping-templates";
 import {
   projectPersonalInfoFromImportPatches,
-  syncProjectPersonalInfoFromImport,
-  type ProjectPersonalInfoSync,
 } from "@/lib/data-hub/project-personal-sync";
 import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
+import {
+  listAllPublicDeals,
+  publicDealProjectId,
+  type PublicDealRow,
+} from "@/lib/public-deals/client";
 
 export type UploadSampleResult =
   | { ok: true; id: string; rowCount: number; columnCount: number }
   | { error: string };
 
 export async function uploadSampleCsv(formData: FormData): Promise<UploadSampleResult> {
+  void formData;
   const user = await getSessionUser();
   if (!user) return { error: "Not signed in." };
-
-  const file = formData.get("file");
-  if (!(file instanceof File)) return { error: "Choose a CSV file." };
-
-  const fileName = file.name;
-  if (!fileName.toLowerCase().endsWith(".csv")) {
-    return { error: "Only CSV files are supported." };
-  }
-
-  const label = String(formData.get("label") ?? "").trim();
-  if (!label) return { error: "Label is required." };
-
-  const sourceType = String(formData.get("source_type") ?? "").trim();
-  if (
-    sourceType !== "projects_sheet" &&
-    sourceType !== "terros_export" &&
-    sourceType !== "remittance"
-  ) {
-    return { error: "Choose a source type." };
-  }
-
-  const content = await file.text();
-  if (!content.trim()) return { error: "File is empty." };
-
-  const { column_headers, row_count } = parseSampleCsvMetadata(content);
-  if (column_headers.length === 0) {
-    return { error: "Could not parse CSV headers." };
-  }
-
-  const installer = String(formData.get("installer") ?? "").trim() || null;
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-
-  try {
-    const db = createServerSupabase();
-    const { data, error } = await db
-      .from("sample_csv_files")
-      .insert({
-        label,
-        source_type: sourceType as SampleCsvSourceType,
-        installer,
-        file_name: fileName,
-        file_content: content,
-        row_count,
-        column_headers,
-        notes,
-        uploaded_by: user.id,
-      })
-      .select("id")
-      .single();
-
-    if (error) throw new Error(error.message);
-
-    revalidatePath("/samples");
-
-    return {
-      ok: true,
-      id: String(data.id),
-      rowCount: row_count,
-      columnCount: column_headers.length,
-    };
-  } catch (err) {
-    return {
-      error: err instanceof Error ? err.message : "Upload failed.",
-    };
-  }
+  return { error: "Sample CSV storage is disabled. Use the Field Mapper upload flow directly." };
 }
 
 export type ImportWithMappingResult =
@@ -131,15 +68,15 @@ export async function importWithMapping(
   const rows = rowsToRecords(parseCsv(content));
   if (rows.length === 0) return { error: "CSV has no data rows." };
 
-  const db = createServerSupabase();
   let inserted = 0;
   let updated = 0;
   let remittanceInserted = 0;
   let remittanceUpdated = 0;
   const errorMessages: string[] = [];
-  const affectedProjectIds = new Set<string>();
-  const projectSyncUpdates: ProjectPersonalInfoSync[] = [];
-  const importFileHash = `${String(fileName ?? "manual")}-${Date.now()}`;
+  const endpointByProjectId = new Map<string, PublicDealRow>();
+  for (const row of await listAllPublicDeals()) {
+    endpointByProjectId.set(publicDealProjectId(row), row);
+  }
 
   for (let i = 0; i < rows.length; i++) {
     const patch = applyMapping(rows[i]!, mapping, schema);
@@ -162,110 +99,27 @@ export async function importWithMapping(
 
     if (installer) projectPatch.installer = installer;
 
-    const meaningfulProjectKeys = Object.keys(projectPatch).filter(
-      (k) => k !== "project_id",
-    );
-
-    let projectUuid: string | null = null;
-
-    const { data: existing } = await db
-      .from("projects")
-      .select("id, installer")
-      .eq("project_id", normalizedProjectId)
-      .maybeSingle();
-
-    if (existing?.id) {
-      projectUuid = existing.id;
-      if (meaningfulProjectKeys.length > 0) {
-        projectPatch.updated_at = new Date().toISOString();
-        const { project_id: _pid, ...projectUpdate } = projectPatch;
-        const { error } = await db
-          .from("projects")
-          .update(projectUpdate)
-          .eq("id", existing.id);
-        if (error) {
-          errorMessages.push(`Row ${i + 2}: ${error.message}`);
-          continue;
-        }
-        updated++;
-      }
-    } else {
-      projectPatch.updated_at = new Date().toISOString();
-      const { data: created, error } = await db
-        .from("projects")
-        .insert(projectPatch)
-        .select("id")
-        .single();
-      if (error) {
-        errorMessages.push(`Row ${i + 2}: ${error.message}`);
-        continue;
-      }
-      projectUuid = created.id as string;
-      inserted++;
-    }
-
-    if (!projectUuid) continue;
-
-    if (hasRemittancePatch(remittancePatch)) {
-      remittancePatch.hes_code = normalizedProjectId;
-
-      const { data: latestRows, error: latestErr } = await db.rpc(
-        "latest_remittance_for_projects",
-        { project_ids: [projectUuid] },
-      );
-      if (latestErr) {
-        errorMessages.push(`Row ${i + 2}: remittance lookup failed — ${latestErr.message}`);
-        continue;
-      }
-
-      const latest = (latestRows ?? [])[0] as { id?: string | number } | undefined;
-
-      if (latest?.id != null) {
-        const { error } = await db
-          .from("remittance")
-          .update(remittancePatch)
-          .eq("id", latest.id);
-        if (error) {
-          errorMessages.push(`Row ${i + 2}: remittance update — ${error.message}`);
-        } else {
-          remittanceUpdated++;
-          affectedProjectIds.add(projectUuid);
-        }
-        projectSyncUpdates.push({
-          projectId: projectUuid,
-          ...projectPersonalInfoFromImportPatches(projectPatch, remittancePatch),
-        });
-      } else {
-        const { error } = await db.from("remittance").insert({
-          ...remittancePatch,
-          payment_date:
-            (remittancePatch.payment_date as string | undefined) ?? null,
-          project_id: projectUuid,
-          file_name: String(fileName ?? "manual"),
-          file_hash: importFileHash,
-          row_number: i + 2,
-          raw_row: rows[i],
-        });
-        if (error) {
-          errorMessages.push(`Row ${i + 2}: remittance insert — ${error.message}`);
-        } else {
-          remittanceInserted++;
-          affectedProjectIds.add(projectUuid);
-        }
-        projectSyncUpdates.push({
-          projectId: projectUuid,
-          ...projectPersonalInfoFromImportPatches(projectPatch, remittancePatch),
-        });
-      }
+    const existing = endpointByProjectId.get(normalizedProjectId) ?? null;
+    const projectPayload = {
+      project_id: normalizedProjectId,
+      ...projectPersonalInfoFromImportPatches(projectPatch, remittancePatch),
+      ...projectPatch,
+      updated_at: new Date().toISOString(),
+    };
+    const installerForRow =
+      installer ??
+      (typeof projectPayload.installer === "string" ? projectPayload.installer : null) ??
+      existing?.installer ??
+      null;
+    if (!installerForRow) {
+      errorMessages.push(`Row ${i + 2}: installer is required for endpoint import`);
+      continue;
     }
 
     try {
       await syncPublicDealFromHub({
-        installer:
-          installer ??
-          (typeof projectPatch.installer === "string" ? projectPatch.installer : null) ??
-          (existing?.installer != null ? String(existing.installer) : null),
-        project: projectPatch,
+        installer: installerForRow,
+        project: projectPayload,
         remittance: remittancePatch,
         source: {
           fileName: String(fileName ?? "manual"),
@@ -273,6 +127,22 @@ export async function importWithMapping(
           rawRow: rows[i],
         },
       });
+      if (existing) updated++;
+      else {
+        inserted++;
+        endpointByProjectId.set(normalizedProjectId, {
+          vendor: "axia",
+          installer: installerForRow,
+          pk: "project_id",
+          pk_value: normalizedProjectId,
+          project: projectPayload,
+          remittance: hasRemittancePatch(remittancePatch) ? remittancePatch : null,
+        } as PublicDealRow);
+      }
+      if (hasRemittancePatch(remittancePatch)) {
+        if (existing?.remittance) remittanceUpdated++;
+        else remittanceInserted++;
+      }
     } catch (err) {
       errorMessages.push(
         `Row ${i + 2}: public deals sync — ${
@@ -280,17 +150,6 @@ export async function importWithMapping(
         }`,
       );
     }
-  }
-
-  if (projectSyncUpdates.length > 0) {
-    await syncProjectPersonalInfoFromImport(db, projectSyncUpdates);
-  }
-
-  if (affectedProjectIds.size > 0) {
-    const { refreshNetEpcForProjects } = await import(
-      "@/lib/data-hub/remittance-project-sync"
-    );
-    await refreshNetEpcForProjects(db, [...affectedProjectIds]);
   }
 
   revalidatePath("/projects");
@@ -306,103 +165,28 @@ export async function importWithMapping(
 }
 
 export async function deleteSampleCsv(id: string): Promise<{ ok: true } | { error: string }> {
+  void id;
   const user = await getSessionUser();
   if (!user) return { error: "Not signed in." };
-
-  try {
-    const db = createServerSupabase();
-    const { error } = await db.from("sample_csv_files").delete().eq("id", id);
-    if (error) throw new Error(error.message);
-
-    revalidatePath("/samples");
-    return { ok: true };
-  } catch (err) {
-    return {
-      error: err instanceof Error ? err.message : "Delete failed.",
-    };
-  }
+  return { error: "Sample CSV storage is disabled." };
 }
 
 export async function saveMappingTemplate(formData: FormData): Promise<
   { ok: true; id: string } | { error: string }
 > {
+  void formData;
   const user = await getSessionUser();
   if (!user) return { error: "Not signed in." };
-
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return { error: "Template name is required." };
-
-  const schemaType = formData.get("schema_type");
-  if (schemaType !== "projects" && schemaType !== "remittance") {
-    return { error: "Invalid schema type." };
-  }
-
-  const mappingRaw = formData.get("column_map");
-  if (typeof mappingRaw !== "string") return { error: "No column mapping." };
-
-  let columnMap: Record<string, string>;
-  try {
-    columnMap = JSON.parse(mappingRaw) as Record<string, string>;
-  } catch {
-    return { error: "Invalid column mapping JSON." };
-  }
-
-  const installerName = String(formData.get("installer_name") ?? "").trim() || null;
-  const templateId = String(formData.get("id") ?? "").trim() || null;
-
-  try {
-    const db = createServerSupabase();
-    const payload = {
-      name,
-      installer_name: installerName,
-      schema_type: schemaType,
-      column_map: columnMap,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (templateId) {
-      const { error } = await db
-        .from("mapping_templates")
-        .update(payload)
-        .eq("id", templateId);
-      if (error) throw new Error(error.message);
-      revalidatePath("/imports");
-      return { ok: true, id: templateId };
-    }
-
-    const { data, error } = await db
-      .from("mapping_templates")
-      .insert({ ...payload, created_by: user.id })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-
-    revalidatePath("/imports");
-    return { ok: true, id: String(data.id) };
-  } catch (err) {
-    return {
-      error: err instanceof Error ? err.message : "Save failed.",
-    };
-  }
+  return { error: "Mapping templates are saved in this browser now." };
 }
 
 export async function deleteMappingTemplate(
   id: string
 ): Promise<{ ok: true } | { error: string }> {
+  void id;
   const user = await getSessionUser();
   if (!user) return { error: "Not signed in." };
-
-  try {
-    const db = createServerSupabase();
-    const { error } = await db.from("mapping_templates").delete().eq("id", id);
-    if (error) throw new Error(error.message);
-    revalidatePath("/imports");
-    return { ok: true };
-  } catch (err) {
-    return {
-      error: err instanceof Error ? err.message : "Delete failed.",
-    };
-  }
+  return { error: "Mapping templates are saved in this browser now." };
 }
 
 export async function fetchMappingTemplates(
@@ -411,36 +195,9 @@ export async function fetchMappingTemplates(
 ): Promise<MappingTemplate[] | { error: string }> {
   const user = await getSessionUser();
   if (!user) return { error: "Not signed in." };
-
-  try {
-    const db = createServerSupabase();
-    let query = db
-      .from("mapping_templates")
-      .select("id, name, installer_name, schema_type, column_map, created_at")
-      .order("created_at", { ascending: false });
-
-    if (schemaType) query = query.eq("schema_type", schemaType);
-    if (installerName?.trim()) query = query.eq("installer_name", installerName.trim());
-
-    const { data, error } = await query;
-    if (error) {
-      if (error.message.includes("mapping_templates")) return [];
-      throw new Error(error.message);
-    }
-
-    return (data ?? []).map((row) => ({
-      id: String(row.id),
-      name: String(row.name),
-      installer_name: row.installer_name != null ? String(row.installer_name) : null,
-      schema_type: row.schema_type as "projects" | "remittance",
-      column_map: (row.column_map ?? {}) as Record<string, string>,
-      created_at: String(row.created_at),
-    }));
-  } catch (err) {
-    return {
-      error: err instanceof Error ? err.message : "Load failed.",
-    };
-  }
+  void schemaType;
+  void installerName;
+  return [];
 }
 
 export async function fetchInstallerNames(): Promise<string[] | { error: string }> {
@@ -448,14 +205,8 @@ export async function fetchInstallerNames(): Promise<string[] | { error: string 
   if (!user) return { error: "Not signed in." };
 
   try {
-    const db = createServerSupabase();
-    const { data, error } = await db.from("projects").select("installer");
-    if (error) {
-      if (error.message.includes("projects")) return [];
-      throw new Error(error.message);
-    }
     const { mergeInstallerOptions } = await import("@/lib/data-hub/installers");
-    const fromDb = (data ?? [])
+    const fromDb = (await listAllPublicDeals())
       .map((r) => (r.installer != null ? String(r.installer) : ""))
       .filter(Boolean);
     return mergeInstallerOptions(fromDb);
