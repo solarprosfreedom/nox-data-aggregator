@@ -142,6 +142,7 @@ export default function ImportUploadForm({ installers }: { installers: string[] 
               options={installers}
               value={installer}
               onChange={setInstaller}
+              allowCustom={false}
               placeholder="Apply to all rows (optional)…"
             />
             <p className="mt-1 text-xs text-slate-500">

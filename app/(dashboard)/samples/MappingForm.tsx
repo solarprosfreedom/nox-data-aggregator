@@ -252,6 +252,7 @@ export default function MappingForm({
             options={installers}
             value={installer}
             onChange={setInstaller}
+            allowCustom={false}
             placeholder="Apply to all rows (optional)…"
           />
         </div>
@@ -350,6 +351,7 @@ export default function MappingForm({
           options={installers}
           value={installer}
           onChange={setInstaller}
+          allowCustom={false}
           placeholder="Apply to all rows (optional)…"
         />
       </div>
