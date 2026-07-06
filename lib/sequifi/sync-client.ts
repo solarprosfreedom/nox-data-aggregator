@@ -1,6 +1,6 @@
 import type { SequifiSyncResponse } from "@/lib/sequifi/sync";
 
-/** Apply sync via API route (5 min timeout). Preview uses the server action instead. */
+/** Apply sync via API route (5 min timeout). */
 export async function applySequifiSync(): Promise<SequifiSyncResponse> {
   const res = await fetch("/api/sync/sequifi", {
     method: "POST",

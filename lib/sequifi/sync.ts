@@ -1,24 +1,18 @@
 import {
   fetchAllSequifiSales,
   upsertSequifiSales,
-  type SequifiSale,
   type SequifiUpsertRecord,
 } from "@/lib/sequifi/client";
 import {
   buildSalesIndex,
   matchProjectToSale,
-  normalizeName,
-  repName,
 } from "@/lib/sequifi/matcher";
 import { buildSequifiUpsertRecord } from "@/lib/sequifi/build-upsert-record";
 import {
   listEndpointProjects,
   type RemittanceSummary,
 } from "@/lib/data-hub/queries";
-import {
-  patchPublicDealFromHub,
-  syncPublicDealFromHub,
-} from "@/lib/data-hub/public-deals-sync";
+import { patchPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
 
 type ProjectRow = {
   id: string;
@@ -50,40 +44,17 @@ export type SequifiSyncResult = {
   sequifiSales: number;
   pushedUpdate: number;
   pushedNew: number;
-  pulledNew: number;
   linkedExisting: number;
   ambiguous: number;
   skippedMissingFields: number;
   errors: number;
   errorMessages: string[];
-  samples: { update: string[]; create: string[]; pull: string[] };
+  samples: { update: string[]; create: string[] };
 };
 
 export type SequifiSyncResponse = SequifiSyncResult | { error: string };
 
 const LINK_PARALLEL = 40;
-
-function buildProjectFromSale(sale: SequifiSale): Record<string, unknown> {
-  const row: Record<string, unknown> = {
-    project_id: sale.pid,
-    sequifi_sale_id: sale.pid,
-    opportunity_name: sale.customer_name,
-    state_code: sale.customer_state,
-    system_size_kw: sale.kw,
-    total_system_cost: sale.gross_account_value,
-    contract_signed_date: sale.customer_signoff ? sale.customer_signoff.slice(0, 10) : null,
-    installer: sale.install_partner,
-    closer_name: repName(sale.closer1),
-    setter_name: repName(sale.setter1),
-    closer_sequifi_employee_id: sale.closer1 ? String(sale.closer1.id) : null,
-    setter_sequifi_employee_id: sale.setter1 ? String(sale.setter1.id) : null,
-    sequifi_job_status: sale.job_status,
-    sequifi_total_commission: sale.total_commission,
-    sequifi_synced_at: new Date().toISOString(),
-  };
-  if (sale.net_epc != null) row.net_epc = sale.net_epc;
-  return row;
-}
 
 async function linkPushedProjects(
   pushApply: {
@@ -150,13 +121,12 @@ export async function runSequifiSync({
     sequifiSales: 0,
     pushedUpdate: 0,
     pushedNew: 0,
-    pulledNew: 0,
     linkedExisting: 0,
     ambiguous: 0,
     skippedMissingFields: 0,
     errors: 0,
     errorMessages: [],
-    samples: { update: [], create: [], pull: [] },
+    samples: { update: [], create: [] },
   };
 
   try {
@@ -173,12 +143,6 @@ export async function runSequifiSync({
     const sales = await fetchAllSequifiSales();
     result.sequifiSales = sales.length;
     const index = buildSalesIndex(sales);
-
-    const projectNames = new Set<string>();
-    for (const p of projects) {
-      const n = normalizeName(p.opportunity_name);
-      if (n) projectNames.add(n);
-    }
 
     const pushRecords: SequifiUpsertRecord[] = [];
     const pushApply: {
@@ -249,22 +213,9 @@ export async function runSequifiSync({
       }
     }
 
-    const pushedPids = new Set(pushApply.map((x) => x.pid));
-    const pullInserts: Record<string, unknown>[] = [];
-    for (const sale of sales) {
-      if (pushedPids.has(sale.pid)) continue;
-      const n = normalizeName(sale.customer_name);
-      if (n && projectNames.has(n)) continue;
-      pullInserts.push(buildProjectFromSale(sale));
-      if (result.samples.pull.length < 10) {
-        result.samples.pull.push(`${sale.pid} (${sale.customer_name})`);
-      }
-    }
-
     if (dryRun) {
       result.pushedUpdate = pushApply.filter((x) => !x.isNew).length;
       result.pushedNew = pushApply.filter((x) => x.isNew).length;
-      result.pulledNew = pullInserts.length;
       return result;
     }
 
@@ -289,27 +240,6 @@ export async function runSequifiSync({
       for (const e of linked.errors) {
         if (result.errorMessages.length < 15) {
           result.errorMessages.push(`link ${e.id}: ${e.message}`);
-        }
-      }
-    }
-
-    if (pullInserts.length) {
-      for (const project of pullInserts) {
-        try {
-          await syncPublicDealFromHub({
-            installer: typeof project.installer === "string" ? project.installer : null,
-            project,
-          });
-          result.pulledNew++;
-        } catch (err) {
-          result.errors++;
-          if (result.errorMessages.length < 15) {
-            result.errorMessages.push(
-              `pull ${String(project.project_id ?? "unknown")}: ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-            );
-          }
         }
       }
     }

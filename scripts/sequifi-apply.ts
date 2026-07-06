@@ -15,7 +15,6 @@ async function main() {
   console.log(`Sequifi sales:        ${r.sequifiSales}`);
   console.log(`Updated Sequifi:      ${r.pushedUpdate}`);
   console.log(`Created Sequifi:      ${r.pushedNew}`);
-  console.log(`Pulled to hub:        ${r.pulledNew}`);
   console.log(`Skipped (missing):    ${r.skippedMissingFields}`);
   console.log(`Skipped (ambiguous):  ${r.ambiguous}`);
   console.log(`Errors:               ${r.errors}`);

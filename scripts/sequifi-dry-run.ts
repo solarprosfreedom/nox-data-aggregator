@@ -65,7 +65,7 @@ async function analyzeReadiness() {
 async function main() {
   await analyzeReadiness();
 
-  console.log("\n=== Sync Sequifi PREVIEW (same as Preview button) ===");
+  console.log("\n=== Sync Sequifi DRY RUN ===");
   const r = await runSequifiSync({ dryRun: true });
   if ("error" in r) {
     console.error("ERROR:", r.error);
@@ -76,7 +76,6 @@ async function main() {
   console.log(`Sequifi sales:        ${r.sequifiSales}`);
   console.log(`Would UPDATE Sequifi: ${r.pushedUpdate} (matched existing sales)`);
   console.log(`Would CREATE Sequifi: ${r.pushedNew} (new hub projects)`);
-  console.log(`Would PULL to hub:    ${r.pulledNew} (Sequifi-only → new projects)`);
   console.log(`Skipped (missing fields): ${r.skippedMissingFields}`);
   console.log(`Skipped (ambiguous name): ${r.ambiguous}`);
   console.log(`Linked existing matches:  ${r.linkedExisting}`);
@@ -88,10 +87,6 @@ async function main() {
   if (r.samples.create.length) {
     console.log("\nSample creates:");
     r.samples.create.forEach((s) => console.log(`  ${s}`));
-  }
-  if (r.samples.pull.length) {
-    console.log("\nSample pulls:");
-    r.samples.pull.forEach((s) => console.log(`  ${s}`));
   }
 
   console.log("\nNothing was written (dry run).");

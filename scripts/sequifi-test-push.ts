@@ -92,7 +92,6 @@ async function syncDryRunSummary() {
   console.log(`Sequifi sales:    ${result.sequifiSales}`);
   console.log(`Would update:     ${result.pushedUpdate}`);
   console.log(`Would create:     ${result.pushedNew}`);
-  console.log(`Would pull:       ${result.pulledNew}`);
   console.log(`Skipped (missing required fields): ${result.skippedMissingFields}`);
   console.log(`Ambiguous matches: ${result.ambiguous}`);
   if (result.samples.update.length) {

@@ -1,23 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { syncWithSequifi, type SequifiSyncResult } from "./sequifi-actions";
+import type { SequifiSyncResult } from "./sequifi-actions";
 import { applySequifiSync } from "@/lib/sequifi/sync-client";
 
 export default function SequifiSyncButton() {
   const [pending, startTransition] = useTransition();
-  const [mode, setMode] = useState<"preview" | "apply" | null>(null);
   const [result, setResult] = useState<SequifiSyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function run(dryRun: boolean) {
+  function run() {
     setResult(null);
     setError(null);
-    setMode(dryRun ? "preview" : "apply");
     startTransition(async () => {
-      const res = dryRun
-        ? await syncWithSequifi({ dryRun: true })
-        : await applySequifiSync();
+      const res = await applySequifiSync();
       if ("error" in res) setError(res.error);
       else setResult(res);
     });
@@ -29,25 +25,18 @@ export default function SequifiSyncButton() {
         <h2 className="text-lg font-semibold text-slate-900">Sync with Sequifi</h2>
         <p className="mt-1 text-sm text-slate-500">
           Links projects to Sequifi sales by PID then customer name, pushes app
-          data to Sequifi (updates linked sales, creates missing ones), and pulls
-          Sequifi-only sales into the hub. Installer endpoints are the source of
-          truth. Run Preview first to see what will change.
+          data to Sequifi (updates linked sales and creates missing ones), and
+          writes Sequifi link metadata back to the installer endpoints.
+          Installer endpoints are the source of truth.
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
-            onClick={() => run(true)}
-            disabled={pending}
-            className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {pending && mode === "preview" ? "Previewing…" : "Preview (dry run)"}
-          </button>
-          <button
-            onClick={() => run(false)}
+            onClick={run}
             disabled={pending}
             className="rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
           >
-            {pending && mode === "apply" ? (
+            {pending ? (
               <span className="flex items-center gap-2">
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 Syncing…
@@ -58,9 +47,7 @@ export default function SequifiSyncButton() {
           </button>
           {pending && (
             <p className="text-sm text-slate-500">
-              {mode === "apply"
-                ? "Pushing to Sequifi… this may take a few minutes. Keep this tab open."
-                : "Reconciling projects with Sequifi sales…"}
+              Pushing to Sequifi… this may take a few minutes. Keep this tab open.
             </p>
           )}
         </div>
@@ -75,7 +62,7 @@ export default function SequifiSyncButton() {
       {result && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="mb-1 text-base font-semibold text-slate-900">
-            {result.dryRun ? "Preview — nothing was written" : "Sync results"}
+            Sync results
           </h2>
           <p className="mb-4 text-xs text-slate-500">
             {result.projectsScanned.toLocaleString()} projects ·{" "}
@@ -83,9 +70,8 @@ export default function SequifiSyncButton() {
           </p>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Stat label={result.dryRun ? "Would update in Sequifi" : "Updated in Sequifi"} value={result.pushedUpdate} color="emerald" />
-            <Stat label={result.dryRun ? "Would create in Sequifi" : "Created in Sequifi"} value={result.pushedNew} color="emerald" />
-            <Stat label={result.dryRun ? "Would pull into hub" : "Pulled into hub"} value={result.pulledNew} color="orange" />
+            <Stat label="Updated in Sequifi" value={result.pushedUpdate} color="emerald" />
+            <Stat label="Created in Sequifi" value={result.pushedNew} color="emerald" />
             <Stat label="Linked to existing" value={result.linkedExisting} color="slate" />
             <Stat label="Ambiguous (skipped)" value={result.ambiguous} color="amber" />
             <Stat label="Missing fields (skipped)" value={result.skippedMissingFields} color="amber" />
@@ -94,7 +80,6 @@ export default function SequifiSyncButton() {
 
           <SampleList title="Update samples" items={result.samples.update} />
           <SampleList title="Create samples" items={result.samples.create} />
-          <SampleList title="Pull samples" items={result.samples.pull} />
 
           {result.errorMessages.length > 0 && (
             <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
