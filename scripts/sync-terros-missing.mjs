@@ -5,6 +5,7 @@
  *   node scripts/sync-terros-missing.mjs --all          # full scan (all workflow stages)
  *   node scripts/sync-terros-missing.mjs --from 2026-06-01
  *   node scripts/sync-terros-missing.mjs --all --dry-run
+ *   node scripts/sync-terros-missing.mjs --all --update-existing
  */
 
 import dotenv from "dotenv";
@@ -20,6 +21,7 @@ const JUNE_START_DEFAULT = "2026-06-01T00:00:00.000Z";
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const allStages = args.includes("--all");
+const updateExisting = args.includes("--update-existing") || args.includes("--refresh");
 const fromArg = args.find((a, i) => args[i - 1] === "--from") ?? JUNE_START_DEFAULT;
 
 const terrosBase = (process.env.TERROS_API_BASE_URL ?? "https://api.terros.com").replace(
@@ -251,47 +253,62 @@ async function* paginateByDate(fromMs, toMs) {
   }
 }
 
-async function processRows(rows, existingIds, stats, label) {
+async function processRows(rows, existingIds, seenInRun, stats, label) {
   const toUpsert = [];
 
   for (const acc of rows) {
     const accountId = normText(acc.accountId ?? acc.id);
     if (!accountId) continue;
+    if (seenInRun.has(accountId)) {
+      stats.duplicatesSkipped += 1;
+      continue;
+    }
+    seenInRun.add(accountId);
 
     stats.terrosFetched += 1;
 
-    if (existingIds.has(accountId)) {
+    const exists = existingIds.has(accountId);
+    if (exists) {
       stats.alreadyInSupabase += 1;
-      continue;
+      if (!updateExisting) continue;
+    } else {
+      stats.missing += 1;
     }
 
-    stats.missing += 1;
     const mapped = mapAccount(acc);
-    if (mapped) toUpsert.push(mapped);
+    if (mapped) toUpsert.push({ row: mapped, exists });
   }
 
   if (toUpsert.length && !dryRun) {
     for (let i = 0; i < toUpsert.length; i += UPSERT_BATCH) {
       const batch = toUpsert.slice(i, i + UPSERT_BATCH);
-      const { error } = await upsertBatch(batch);
+      const { error } = await upsertBatch(batch.map((item) => item.row));
       if (error) {
         stats.failed += batch.length;
         console.error(`Upsert error (${label}): ${error.message}`);
       } else {
         stats.upserted += batch.length;
-        for (const row of batch) existingIds.add(row.account_id);
+        for (const item of batch) {
+          if (item.exists) stats.updatedExisting += 1;
+          else stats.insertedNew += 1;
+          existingIds.add(item.row.account_id);
+        }
       }
     }
   } else if (toUpsert.length && dryRun) {
     stats.upserted += toUpsert.length;
+    for (const item of toUpsert) {
+      if (item.exists) stats.updatedExisting += 1;
+      else stats.insertedNew += 1;
+    }
   }
 
   if (toUpsert.length > 0) {
-    console.log(`${label}: +${toUpsert.length} missing (total upserted ${stats.upserted})`);
+    console.log(`${label}: ${toUpsert.length} to upsert (total ${stats.upserted})`);
   }
 }
 
-async function syncAllStages(existingIds, stats) {
+async function syncAllStages(existingIds, seenInRun, stats) {
   const stages = await fetchAllStageIds();
   console.log(`Scanning ${stages.length} workflow stages…`);
 
@@ -300,12 +317,12 @@ async function syncAllStages(existingIds, stats) {
     for await (const rows of paginateStage(stage.id)) {
       page += 1;
       stats.pages += 1;
-      await processRows(rows, existingIds, stats, `${stage.name} p${page}`);
+      await processRows(rows, existingIds, seenInRun, stats, `${stage.name} p${page}`);
     }
   }
 }
 
-async function syncDateRange(existingIds, stats) {
+async function syncDateRange(existingIds, seenInRun, stats) {
   console.log(
     `Scanning lastActionDate ${new Date(rangeStartMs).toISOString()} → ${new Date(rangeEndMs).toISOString()}…`
   );
@@ -316,29 +333,33 @@ async function syncDateRange(existingIds, stats) {
     stats.pages += 1;
     const last = rows[rows.length - 1]?.lastActionDate;
     const lastIso = typeof last === "number" ? new Date(last).toISOString() : "n/a";
-    await processRows(rows, existingIds, stats, `date p${page} (${lastIso})`);
+    await processRows(rows, existingIds, seenInRun, stats, `date p${page} (${lastIso})`);
   }
 }
 
 async function main() {
   console.log(
-    `Terros → Supabase sync${dryRun ? " (dry run)" : ""} [${allStages ? "all stages" : "date range"}]\n`
+    `Terros → Supabase sync${dryRun ? " (dry run)" : ""} [${allStages ? "all stages" : "date range"}${updateExisting ? ", update existing" : ", insert missing only"}]\n`
   );
 
   const existingIds = await loadExistingAccountIds();
+  const seenInRun = new Set();
   const stats = {
     pages: 0,
     terrosFetched: 0,
     alreadyInSupabase: 0,
     missing: 0,
     upserted: 0,
+    insertedNew: 0,
+    updatedExisting: 0,
+    duplicatesSkipped: 0,
     failed: 0,
   };
 
   if (allStages) {
-    await syncAllStages(existingIds, stats);
+    await syncAllStages(existingIds, seenInRun, stats);
   } else {
-    await syncDateRange(existingIds, stats);
+    await syncDateRange(existingIds, seenInRun, stats);
   }
 
   const { count } = await db

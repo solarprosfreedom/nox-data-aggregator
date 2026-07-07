@@ -82,6 +82,12 @@ Set `DATA_HUB_API_KEY` in `.env.local`.
 - Upserts into `tape_customers` on `tape_record_id`.
 - Scheduled every 15 minutes (offset from other cron jobs) via `vercel.json`.
 
+## Coperniq outbound webhooks
+
+- Endpoint: `POST /api/webhooks/coperniq`
+- Accepts Coperniq `application/json` webhook payloads and stores the exact raw body plus parsed normalized fields in `coperniq_webhooks`.
+- Auth is optional. Leave `COPERNIQ_WEBHOOK_SECRET` blank for Coperniq's no-auth setup, or set it and pass the value as `x-coperniq-webhook-secret`, `x-webhook-secret`, bearer token, `?secret=`, or `?token=`.
+
 ## Architecture
 
 - **`hub_projects`** — unified project/deal records
