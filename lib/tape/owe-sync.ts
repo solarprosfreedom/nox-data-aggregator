@@ -1,4 +1,5 @@
 import {
+  patchPublicDealFromHub,
   syncPublicDealFromHub,
   type PublicDealSyncInput,
 } from "@/lib/data-hub/public-deals-sync";
@@ -261,14 +262,20 @@ async function fetchExistingProjectIds(projectIds: string[]): Promise<Set<string
   );
 }
 
-async function upsertProjects(rows: Record<string, string | number | null>[]): Promise<void> {
+async function upsertProjects(
+  rows: Record<string, string | number | null>[],
+  existingProjectIds: Set<string>,
+): Promise<void> {
   if (rows.length === 0) return;
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
     const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE).map(sanitizeRow);
     await Promise.all(
-      chunk.map((project) =>
-        syncPublicDealFromHub(buildTapeOwePublicDealSyncInput(project)),
-      ),
+      chunk.map((project) => {
+        const projectId = typeof project.project_id === "string" ? project.project_id : "";
+        return existingProjectIds.has(projectId)
+          ? patchPublicDealFromHub(buildTapeOwePublicDealSyncInput(project))
+          : syncPublicDealFromHub(buildTapeOwePublicDealSyncInput(project));
+      }),
     );
   }
 }
@@ -300,7 +307,7 @@ export async function runTapeOweSync(): Promise<TapeOweSyncResult> {
     else inserted++;
   }
 
-  await upsertProjects(mapped);
+  await upsertProjects(mapped, existing);
 
   return {
     fetched: records.length,
