@@ -1,3 +1,5 @@
+import { revalidateTag } from "next/cache";
+
 export type PublicDealVendor = "axia" | "illum" | "tron" | "empwr" | "goodpwr" | "owe";
 
 export type PublicDealPayload = {
@@ -30,6 +32,7 @@ type PublicDealsListResponse = {
 };
 
 const DEFAULT_BASE = "https://hub.noxpwr.com/api/public/deals";
+export const PUBLIC_DEALS_CACHE_TAG = "public-deals";
 
 const INSTALLER_VENDOR_ALIASES: Array<[RegExp, PublicDealVendor]> = [
   [/axia/i, "axia"],
@@ -122,7 +125,13 @@ export async function putPublicDeal(
   return response.json() as Promise<unknown>;
 }
 
-export async function listPublicDeals(vendor: PublicDealVendor, limit = 5000) {
+type PublicDealsReadMode = "fresh" | "cached";
+
+export async function listPublicDeals(
+  vendor: PublicDealVendor,
+  limit = 5000,
+  mode: PublicDealsReadMode = "fresh",
+) {
   const key = publicDealsApiKey();
   if (!key) {
     throw new Error("Missing PUBLIC_DEALS_API_KEY or DATA_HUB_API_KEY");
@@ -141,7 +150,9 @@ export async function listPublicDeals(vendor: PublicDealVendor, limit = 5000) {
         accept: "application/json",
         "x-api-key": key,
       },
-      cache: "no-store",
+      ...(mode === "cached"
+        ? { next: { revalidate: 60, tags: [PUBLIC_DEALS_CACHE_TAG] } }
+        : { cache: "no-store" as const }),
     });
 
     if (!response.ok) {
@@ -165,6 +176,19 @@ export async function listAllPublicDeals(limitPerVendor = 5000) {
     PUBLIC_DEAL_VENDORS.map((vendor) => listPublicDeals(vendor, limitPerVendor)),
   );
   return chunks.flat();
+}
+
+export async function listAllPublicDealsCached(limitPerVendor = 100) {
+  const chunks = await Promise.all(
+    PUBLIC_DEAL_VENDORS.map((vendor) =>
+      listPublicDeals(vendor, limitPerVendor, "cached"),
+    ),
+  );
+  return chunks.flat();
+}
+
+export function invalidatePublicDealsCache() {
+  revalidateTag(PUBLIC_DEALS_CACHE_TAG, { expire: 0 });
 }
 
 export function publicDealProjectId(row: PublicDealRow) {

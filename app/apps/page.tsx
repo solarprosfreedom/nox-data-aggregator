@@ -30,7 +30,7 @@ export default async function AppsPage() {
       slug: "nox-data-hub" as const,
       title: "Data Hub",
       description: "Import projects, Terros exports, and remittance files.",
-      href: "/projects",
+      href: "/dashboard",
       enabled: apps.includes("nox-data-hub"),
       color: "bg-orange-600",
       internal: true,
@@ -39,7 +39,7 @@ export default async function AppsPage() {
   ].filter((c) => c.enabled || ("underDevelopment" in c && c.underDevelopment));
 
   if (cards.length === 1 && cards[0]?.internal) {
-    redirect("/projects");
+    redirect("/dashboard");
   }
   if (cards.length === 1 && !cards[0]?.internal) {
     redirect(cards[0]!.href);

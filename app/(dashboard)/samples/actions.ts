@@ -16,6 +16,7 @@ import {
 import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
 import {
   listAllPublicDeals,
+  invalidatePublicDealsCache,
   publicDealProjectId,
   type PublicDealRow,
 } from "@/lib/public-deals/client";
@@ -152,6 +153,8 @@ export async function importWithMapping(
     }
   }
 
+  invalidatePublicDealsCache();
+  revalidatePath("/dashboard");
   revalidatePath("/projects");
 
   return {

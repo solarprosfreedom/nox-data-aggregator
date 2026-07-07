@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 import { signOutAction } from "@/app/login/actions";
 import {
   IconApps,
+  IconDashboard,
   IconHistory,
   IconImport,
   IconLogOut,
@@ -23,12 +24,14 @@ type NavItem = {
 };
 
 const ADMIN_NAV: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: <IconDashboard size={17} />, exact: true },
   { href: "/projects", label: "Projects", icon: <IconProjects size={17} /> },
   { href: "/imports", label: "Import", icon: <IconImport size={17} />, exact: true },
   { href: "/imports/history", label: "History", icon: <IconHistory size={17} /> },
 ];
 
 const MEMBER_NAV: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: <IconDashboard size={17} />, exact: true },
   { href: "/projects", label: "Projects", icon: <IconProjects size={17} />, exact: true },
 ];
 

@@ -1,8 +1,8 @@
 import { mergeInstallerOptions } from "@/lib/data-hub/installers";
-import { listAllPublicDeals } from "@/lib/public-deals/client";
+import { listAllPublicDealsCached } from "@/lib/public-deals/client";
 
 export async function listInstallerNames(): Promise<string[]> {
-  const rows = await listAllPublicDeals();
+  const rows = await listAllPublicDealsCached();
   const fromDb = rows
     .map((r) => (r.installer != null ? String(r.installer) : ""))
     .filter(Boolean);

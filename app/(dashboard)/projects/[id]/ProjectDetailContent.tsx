@@ -124,7 +124,6 @@ export async function ProjectDetailContent({ id }: { id: string }) {
         </Section>
         <Section title="External IDs">
           <Field label="Terros account" value={p.terros_account_id} />
-          <Field label="Sequifi sale" value={p.sequifi_sale_id} />
         </Section>
         <Section title="Org">
           <Field label="Market" value={p.market} />

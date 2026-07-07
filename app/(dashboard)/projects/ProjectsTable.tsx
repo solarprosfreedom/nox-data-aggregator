@@ -141,7 +141,6 @@ export async function ProjectsTable({
                 {/* Identity */}
                 <TH>#</TH>
                 <SortableColumnHeader label="Project ID" column="project_id" currentSort={sort} currentDir={sortDir} />
-                <TH>Sequifi ID</TH>
                 <SortableColumnHeader label="Customer Name" column="opportunity_name" currentSort={sort} currentDir={sortDir} />
                 <SortableColumnHeader label="Email" column="email" currentSort={sort} currentDir={sortDir} />
                 <SortableColumnHeader label="Phone" column="phone" currentSort={sort} currentDir={sortDir} />
@@ -234,9 +233,6 @@ export async function ProjectsTable({
                     >
                       {p.project_id}
                     </Link>
-                  </TD>
-                  <TD mono>
-                    <Str v={p.sequifi_sale_id} />
                   </TD>
                   <TD>
                     <span className="font-medium text-slate-900">

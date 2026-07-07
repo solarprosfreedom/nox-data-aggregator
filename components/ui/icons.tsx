@@ -31,6 +31,17 @@ export function IconProjects(props: IconProps) {
   );
 }
 
+export function IconDashboard(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="3" width="7" height="8" rx="1.5" />
+      <rect x="14" y="3" width="7" height="5" rx="1.5" />
+      <rect x="14" y="12" width="7" height="9" rx="1.5" />
+      <rect x="3" y="15" width="7" height="6" rx="1.5" />
+    </Icon>
+  );
+}
+
 export function IconImport(props: IconProps) {
   return (
     <Icon {...props}>

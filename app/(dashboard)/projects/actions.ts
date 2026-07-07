@@ -11,6 +11,7 @@ import {
   deletePublicDealFromHub,
   patchPublicDealFromHub,
 } from "@/lib/data-hub/public-deals-sync";
+import { invalidatePublicDealsCache } from "@/lib/public-deals/client";
 
 export type { ProjectFormData };
 
@@ -63,6 +64,8 @@ export async function updateProject(
         : {},
     });
 
+    invalidatePublicDealsCache();
+    revalidatePath("/dashboard");
     revalidatePath("/projects");
     revalidatePath(`/projects/${id}`);
     return { ok: true };
@@ -80,6 +83,8 @@ export async function deleteProject(
       installer: installerHint ?? null,
       projectId: id,
     });
+    invalidatePublicDealsCache();
+    revalidatePath("/dashboard");
     revalidatePath("/projects");
     return { ok: true };
   } catch (err) {

@@ -11,6 +11,7 @@ import {
 } from "@/lib/terros/matcher";
 import { listEndpointProjects } from "@/lib/data-hub/queries";
 import { patchPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
+import { invalidatePublicDealsCache } from "@/lib/public-deals/client";
 
 export type SyncResult = {
   projectsScanned: number;
@@ -152,6 +153,8 @@ export async function syncSettersFromTerros(): Promise<SyncSettersResult> {
       else stats.filled++;
     }
 
+    invalidatePublicDealsCache();
+    revalidatePath("/dashboard");
     revalidatePath("/projects");
     return stats;
   } catch (err) {

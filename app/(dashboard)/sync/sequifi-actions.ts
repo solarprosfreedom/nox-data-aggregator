@@ -6,6 +6,7 @@ import {
   type SequifiSyncResponse,
   type SequifiSyncResult,
 } from "@/lib/sequifi/sync";
+import { invalidatePublicDealsCache } from "@/lib/public-deals/client";
 
 export type { SequifiSyncResponse, SequifiSyncResult };
 
@@ -17,6 +18,8 @@ export async function syncWithSequifi({
 }): Promise<SequifiSyncResponse> {
   const result = await runSequifiSync({ dryRun });
   if (!("error" in result) && !dryRun) {
+    invalidatePublicDealsCache();
+    revalidatePath("/dashboard");
     revalidatePath("/projects");
   }
   return result;

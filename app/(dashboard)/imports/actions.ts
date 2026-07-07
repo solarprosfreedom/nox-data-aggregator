@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth/profile";
 import { detectImportSourceFromCsv, hashFileContent } from "@/lib/data-hub/normalize";
 import { processImport } from "@/lib/data-hub/importer";
+import { invalidatePublicDealsCache } from "@/lib/public-deals/client";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type UploadResult =
@@ -58,6 +59,8 @@ export async function uploadImportFile(formData: FormData): Promise<UploadResult
       installer: source === "projects_sheet" ? installer : null,
     });
 
+    invalidatePublicDealsCache();
+    revalidatePath("/dashboard");
     revalidatePath("/projects");
     revalidatePath("/imports/history");
 

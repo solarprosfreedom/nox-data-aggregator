@@ -10,7 +10,7 @@ import {
   matchesColumnFilter,
   type ParsedColumnFilters,
 } from "@/lib/data-hub/column-filters";
-import { listAllPublicDeals, type PublicDealRow } from "@/lib/public-deals/client";
+import { listAllPublicDealsCached, type PublicDealRow } from "@/lib/public-deals/client";
 
 export type Project = {
   id: string;
@@ -135,6 +135,45 @@ function hasMeaningfulRemittanceValue(summary: RemittanceSummary): boolean {
   });
 }
 
+function publicDealProjectStage(row: PublicDealRow): string | null {
+  const project = row.project ?? {};
+  const raw = row.raw ?? {};
+  const directStage =
+    strOrNull(project.project_stage) ??
+    strOrNull(project.pipeline_stage) ??
+    strOrNull(project.contract_status) ??
+    strOrNull(project.status) ??
+    strOrNull(project.phase) ??
+    strOrNull(project.workflow) ??
+    strOrNull(raw.project_stage) ??
+    strOrNull(raw.pipeline_stage) ??
+    strOrNull(raw.contract_status) ??
+    strOrNull(raw.status) ??
+    strOrNull(raw.phase) ??
+    strOrNull(raw.workflow) ??
+    strOrNull(raw.job_status);
+
+  if (directStage) return directStage;
+  if (strOrNull(project.cancel_date) || strOrNull(raw.cancel_date)) return "cancelled";
+  return null;
+}
+
+function publicDealContractSignedDate(row: PublicDealRow): string | null {
+  const project = row.project ?? {};
+  const raw = row.raw ?? {};
+  const rawProperties =
+    raw.raw_properties && typeof raw.raw_properties === "object"
+      ? (raw.raw_properties as Record<string, unknown>)
+      : {};
+  return (
+    strOrNull(project.contract_signed_date) ??
+    strOrNull(project.close_date) ??
+    strOrNull(raw.contract_signed_date) ??
+    strOrNull(raw.close_date) ??
+    strOrNull(rawProperties.closedate)
+  );
+}
+
 function mapPublicDealRemittance(
   remittance: Record<string, unknown> | null,
 ): RemittanceSummary | null {
@@ -216,8 +255,8 @@ export function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
     city: strOrNull(p.city),
     state_code: strOrNull(p.state_code),
     postal_code: strOrNull(p.postal_code),
-    project_stage: strOrNull(p.project_stage),
-    contract_signed_date: strOrNull(p.contract_signed_date),
+    project_stage: publicDealProjectStage(row),
+    contract_signed_date: publicDealContractSignedDate(row),
     total_system_cost: numOrNull(p.total_system_cost),
     system_size_kw: numOrNull(p.system_size_kw),
     sales_advisor_name: strOrNull(p.sales_advisor_name),
@@ -247,7 +286,7 @@ export function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
 }
 
 export async function listEndpointProjects(): Promise<ProjectWithRemittance[]> {
-  const rows = await listAllPublicDeals();
+  const rows = await listAllPublicDealsCached();
   return rows.map(mapPublicDealRow);
 }
 
