@@ -64,6 +64,18 @@ function TD({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
   );
 }
 
+function projectRowKey(
+  project: Awaited<ReturnType<typeof listProjectsPaged>>["rows"][number],
+  index: number,
+) {
+  return [
+    project.installer ?? "unknown",
+    project.project_id || project.id || "project",
+    project.updated_at || "updated",
+    index,
+  ].join(":");
+}
+
 export async function ProjectsTable({
   queryKey,
   search,
@@ -221,7 +233,7 @@ export async function ProjectsTable({
               {projects.map((p, i) => {
                 const d = resolveProjectDisplay(p, p.remittance);
                 return (
-                <tr key={p.id} className="hover:bg-slate-50">
+                <tr key={projectRowKey(p, i)} className="hover:bg-slate-50">
                   {/* Identity */}
                   <TD mono>
                     <span className="text-slate-400">{(page - 1) * pageSize + i + 1}</span>

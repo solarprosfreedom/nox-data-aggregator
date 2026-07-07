@@ -12,6 +12,7 @@ export type PublicDealSyncInput = {
   installer?: string | null;
   project: Record<string, unknown>;
   remittance?: Record<string, unknown>;
+  vendorKey?: Record<string, unknown>;
   source?: {
     fileName?: string | null;
     rowNumber?: number;
@@ -45,6 +46,11 @@ export async function syncPublicDealFromHub(input: PublicDealSyncInput) {
     : {};
 
   const payload: PublicDealPayload = {
+    vendor_key:
+      input.vendorKey ??
+      (vendor === "illum" && typeof project.project_id === "string"
+        ? { deal_id: project.project_id.replace(/^hubspot_/, "") }
+        : undefined),
     project,
     remittance,
     source: {

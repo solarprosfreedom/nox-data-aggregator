@@ -285,9 +285,28 @@ export function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
   };
 }
 
+function projectUpdatedAtValue(row: ProjectWithRemittance) {
+  const value = Date.parse(row.updated_at);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function dedupeEndpointProjects(rows: ProjectWithRemittance[]) {
+  const byProject = new Map<string, ProjectWithRemittance>();
+
+  for (const row of rows) {
+    const key = `${row.installer ?? "unknown"}:${row.project_id || row.id}`;
+    const existing = byProject.get(key);
+    if (!existing || projectUpdatedAtValue(row) >= projectUpdatedAtValue(existing)) {
+      byProject.set(key, row);
+    }
+  }
+
+  return [...byProject.values()];
+}
+
 export async function listEndpointProjects(): Promise<ProjectWithRemittance[]> {
   const rows = await listAllPublicDealsCached();
-  return rows.map(mapPublicDealRow);
+  return dedupeEndpointProjects(rows.map(mapPublicDealRow));
 }
 
 export async function listProjects(limit = 100, search?: string): Promise<Project[]> {

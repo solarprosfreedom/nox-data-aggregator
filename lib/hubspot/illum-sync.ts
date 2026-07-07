@@ -4,11 +4,20 @@ import {
   parseStateCode,
 } from "@/lib/data-hub/normalize";
 import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
-import { listAllPublicDeals, publicDealProjectId } from "@/lib/public-deals/client";
+import {
+  deletePublicDeal,
+  listAllPublicDeals,
+  listPublicDeals,
+  publicDealProjectId,
+  type PublicDealRow,
+} from "@/lib/public-deals/client";
 
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 const DEFAULT_PAGE_SIZE = 100;
 const UPSERT_CHUNK_SIZE = 500;
+const HUBSPOT_BATCH_SIZE = 100;
+const ILLUM_MAMBAS_PIPELINE_ID = "default";
+const ILLUM_MAMBAS_DEAL_NAME_TOKEN = "Mambas";
 
 type HubSpotSyncConfig = {
   tokenEnvVar: string;
@@ -24,15 +33,14 @@ const ILLUM_SYNC_CONFIG: HubSpotSyncConfig = {
   installerValue: "Illum",
 };
 
-/** HubSpot closedate floor (maps to projects.contract_signed_date). */
-const MIN_CLOSE_DATE_MS = Date.parse("2026-01-01T00:00:00.000Z");
-
 const DEAL_PROPERTIES = [
   "hs_object_id",
+  "amount",
   "dealname",
   "dealstage",
   "pipeline",
   "hubspot_owner_id",
+  "createdate",
   "closedate",
   "contact_name",
   "street_address",
@@ -40,11 +48,31 @@ const DEAL_PROPERTIES = [
   "postal_code",
   "phone_number",
   "sales_rep",
+  "sales_rep_name__deal_",
+  "sales_rep_email__deal_",
+  "sales_rep_phone_number__deal_",
+  "sales_rep_setter_name",
+  "sales_rep_setter_email",
+  "sales_rep_setter_phone_number",
+  "system_size_in_kw",
   "contract",
   "hs_lastmodifieddate",
 ] as const;
 
-type HubSpotDeal = {
+const CONTACT_PROPERTIES = [
+  "email",
+  "firstname",
+  "lastname",
+  "phone",
+  "address",
+  "city",
+  "state",
+  "zip",
+] as const;
+
+type ProjectPayloadValue = string | number | null | undefined;
+
+export type HubSpotDeal = {
   id: string;
   properties: Partial<Record<(typeof DEAL_PROPERTIES)[number], string>>;
 };
@@ -70,6 +98,29 @@ type HubSpotOwnersResponse = {
   paging?: { next?: { after?: string } };
 };
 type OwnerInfo = { name: string | null; email: string | null };
+type ContactInfo = {
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+};
+type HubSpotAssociationBatchResponse = {
+  results?: {
+    from?: { id?: string };
+    to?: { toObjectId?: string | number; id?: string | number }[];
+  }[];
+};
+type HubSpotContact = {
+  id: string;
+  properties?: Partial<Record<(typeof CONTACT_PROPERTIES)[number], string>>;
+};
+type HubSpotContactsBatchResponse = {
+  results?: HubSpotContact[];
+};
 
 type SyncStateRow = {
   sync_key: string;
@@ -81,6 +132,7 @@ export type HubSpotIllumSyncResult = {
   inserted: number;
   updated: number;
   skipped: number;
+  staleDeleted: number;
   lastModifiedAt: string | null;
 };
 
@@ -104,9 +156,9 @@ function toDateOnly(value: string | undefined): string | null {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-function parseContract(value: string | undefined): number | null {
+function parseNumber(value: string | undefined): number | null {
   if (!value) return null;
-  const n = Number(value.replace(/[$,]/g, "").trim());
+  const n = Number(value.replace(/[$,\s]/g, "").replace(/kw$/i, "").trim());
   return Number.isFinite(n) ? n : null;
 }
 
@@ -145,9 +197,9 @@ function sanitizeString(value: string): string {
 }
 
 function sanitizeRow(
-  row: Record<string, string | number | null>,
-): Record<string, string | number | null> {
-  const out: Record<string, string | number | null> = {};
+  row: Record<string, ProjectPayloadValue>,
+): Record<string, ProjectPayloadValue> {
+  const out: Record<string, ProjectPayloadValue> = {};
   for (const [k, v] of Object.entries(row)) {
     out[k] = typeof v === "string" ? sanitizeString(v) : v;
   }
@@ -258,6 +310,90 @@ async function hydrateMissingOwners(
   }
 }
 
+function chunked<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function loadDealContactDirectory(
+  token: string,
+  deals: HubSpotDeal[],
+): Promise<Map<string, ContactInfo>> {
+  const contactIdByDealId = new Map<string, string>();
+
+  for (const chunk of chunked(deals, HUBSPOT_BATCH_SIZE)) {
+    const body = {
+      inputs: chunk.map((deal) => ({ id: deal.id })),
+    };
+    const data = await hubSpotRequest<HubSpotAssociationBatchResponse>(
+      token,
+      "/crm/v4/associations/deals/contacts/batch/read",
+      { method: "POST", body },
+    );
+
+    for (const result of data.results ?? []) {
+      const dealId = result.from?.id?.trim();
+      const contactId = result.to?.[0]?.toObjectId ?? result.to?.[0]?.id;
+      if (dealId && contactId != null) contactIdByDealId.set(dealId, String(contactId));
+    }
+  }
+
+  const contactIds = [...new Set(contactIdByDealId.values())];
+  if (!contactIds.length) return new Map();
+
+  const contactsById = new Map<string, ContactInfo>();
+  try {
+    for (const chunk of chunked(contactIds, HUBSPOT_BATCH_SIZE)) {
+      const data = await hubSpotRequest<HubSpotContactsBatchResponse>(
+        token,
+        "/crm/v3/objects/contacts/batch/read",
+        {
+          method: "POST",
+          body: {
+            properties: CONTACT_PROPERTIES,
+            inputs: chunk.map((id) => ({ id })),
+          },
+        },
+      );
+
+      for (const contact of data.results ?? []) {
+        const p = contact.properties ?? {};
+        contactsById.set(contact.id, {
+          email: p.email?.trim() || null,
+          firstName: p.firstname?.trim() || null,
+          lastName: p.lastname?.trim() || null,
+          phone: p.phone?.trim() || null,
+          address: p.address?.trim() || null,
+          city: p.city?.trim() || null,
+          state: p.state?.trim() || null,
+          postalCode: p.zip?.trim() || null,
+        });
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Some HubSpot private apps can read deal associations but not contact details.
+    if (
+      msg.includes("crm.objects.contacts.read") ||
+      msg.includes("crm.objects.contacts.sensitive.read") ||
+      msg.includes("MISSING_SCOPES")
+    ) {
+      return new Map();
+    }
+    throw err;
+  }
+
+  const byDealId = new Map<string, ContactInfo>();
+  for (const [dealId, contactId] of contactIdByDealId) {
+    const contact = contactsById.get(contactId);
+    if (contact) byDealId.set(dealId, contact);
+  }
+  return byDealId;
+}
+
 function resolveStageLabel(
   pipelineId: string | undefined,
   stageId: string | undefined,
@@ -293,20 +429,7 @@ async function fetchDealsIncremental(
     };
     if (after) body.after = after;
 
-    const filters: { propertyName: string; operator: string; value: string }[] = [
-      {
-        propertyName: "closedate",
-        operator: "GTE",
-        value: String(MIN_CLOSE_DATE_MS),
-      },
-    ];
-    if (sinceMs != null) {
-      filters.push({
-        propertyName: "hs_lastmodifieddate",
-        operator: "GT",
-        value: String(sinceMs),
-      });
-    }
+    const filters = buildIllumDealSearchFilters(sinceMs);
     body.filterGroups = [{ filters }];
 
     const page = await hubSpotRequest<HubSpotSearchResponse>(token, "/crm/v3/objects/deals/search", {
@@ -328,53 +451,86 @@ async function fetchDealsIncremental(
   return { deals, maxLastModifiedMs };
 }
 
-function mapDealToProjectRow(
+export function buildIllumDealSearchFilters(sinceMs: number | null): {
+  propertyName: string;
+  operator: string;
+  value: string;
+}[] {
+  const filters = [
+    {
+      propertyName: "pipeline",
+      operator: "EQ",
+      value: ILLUM_MAMBAS_PIPELINE_ID,
+    },
+    {
+      propertyName: "dealname",
+      operator: "CONTAINS_TOKEN",
+      value: ILLUM_MAMBAS_DEAL_NAME_TOKEN,
+    },
+  ];
+  if (sinceMs != null) {
+    filters.push({
+      propertyName: "hs_lastmodifieddate",
+      operator: "GT",
+      value: String(sinceMs),
+    });
+  }
+  return filters;
+}
+
+export function mapIllumDealToProjectRow(
   deal: HubSpotDeal,
   labels: { byPipelineStage: Map<string, string>; byStage: Map<string, string> },
   ownerDirectory: Map<string, OwnerInfo>,
-  config: HubSpotSyncConfig,
-): Record<string, string | number | null> | null {
+  contactByDealId = new Map<string, ContactInfo>(),
+): Record<string, ProjectPayloadValue> | null {
   const p = deal.properties;
   const objectId = p.hs_object_id?.trim();
   if (!objectId) return null;
 
-  const { firstName, lastName } = splitContactName(p.contact_name);
+  const contact = contactByDealId.get(deal.id) ?? contactByDealId.get(objectId);
+  const contactName = p.contact_name?.trim() || null;
+  const { firstName, lastName } = splitContactName(contactName ?? undefined);
   const pipelineId = p.pipeline?.trim();
   const stageId = p.dealstage?.trim();
   const stageLabel = resolveStageLabel(pipelineId, stageId, labels);
-  const ownerId = p.hubspot_owner_id?.trim() || null;
   const salesRepRaw = p.sales_rep?.trim() || null;
-  const owner = ownerId ? ownerDirectory.get(ownerId) : undefined;
   const salesRep = salesRepRaw ? ownerDirectory.get(salesRepRaw) : undefined;
-  const setterName = owner?.name ?? ownerId;
-  const setterEmail = owner?.email ?? null;
-  const salesAdvisorName = salesRep?.name ?? salesRepRaw;
-  const salesAdvisorEmail = salesRep?.email ?? null;
-  const streetAddress = p.street_address?.trim() || null;
+  const setterName = p.sales_rep_setter_name?.trim() || null;
+  const setterEmail = p.sales_rep_setter_email?.trim() || null;
+  const salesAdvisorName =
+    p.sales_rep_name__deal_?.trim() || salesRep?.name || salesRepRaw;
+  const salesAdvisorEmail =
+    p.sales_rep_email__deal_?.trim() || salesRep?.email || null;
+  const streetAddress = p.street_address?.trim() || contact?.address?.trim() || null;
   const dealName = p.dealname?.trim() || null;
-  const postalCode = p.postal_code?.trim() || null;
+  const postalCode = p.postal_code?.trim() || contact?.postalCode?.trim() || null;
   const stateCode =
     parseStateCode(streetAddress, dealName) ??
+    parseStateCode(contact?.state ?? null, null) ??
     inferCaliforniaStateFromZip(postalCode);
 
   return {
-    project_id: `${config.projectIdPrefix}${objectId}`,
-    opportunity_name: dealName || p.contact_name?.trim() || null,
-    first_name: firstName,
-    last_name: lastName,
+    project_id: `${ILLUM_SYNC_CONFIG.projectIdPrefix}${objectId}`,
+    opportunity_name: dealName || contactName,
+    first_name: contact?.firstName || firstName,
+    last_name: contact?.lastName || lastName,
     address_line1: streetAddress,
-    city: p.city?.trim() || null,
+    city: p.city?.trim() || contact?.city?.trim() || null,
     state_code: stateCode,
     postal_code: postalCode,
-    phone: p.phone_number?.trim() || null,
+    email: contact?.email?.trim() || undefined,
+    phone: contact?.phone?.trim() || p.phone_number?.trim() || null,
     project_stage: stageLabel,
     contract_signed_date: toDateOnly(p.closedate),
-    total_system_cost: parseContract(p.contract),
+    total_system_cost: parseNumber(p.amount) ?? parseNumber(p.contract),
+    system_size_kw: parseNumber(p.system_size_in_kw),
     setter_name: setterName,
     setter_email: setterEmail,
     sales_advisor_name: salesAdvisorName,
     sales_advisor_email: salesAdvisorEmail,
-    installer: config.installerValue,
+    installer: ILLUM_SYNC_CONFIG.installerValue,
+    updated_at: p.hs_lastmodifieddate,
   };
 }
 
@@ -412,16 +568,45 @@ async function saveSyncState(
   if (error) throw new Error(error.message);
 }
 
-async function fetchExistingProjectIds(projectIds: string[]): Promise<Set<string>> {
-  const wanted = new Set(projectIds);
-  return new Set(
-    (await listAllPublicDeals())
-      .map(publicDealProjectId)
-      .filter((id) => wanted.has(id)),
-  );
+function addProjectIdAliases(target: Set<string>, value: string | null | undefined): void {
+  const id = value?.trim();
+  if (!id) return;
+  target.add(id);
+  if (id.startsWith("hubspot_")) target.add(id.slice("hubspot_".length));
+  else target.add(`hubspot_${id}`);
 }
 
-async function upsertProjects(rows: Record<string, string | number | null>[]): Promise<void> {
+async function fetchExistingPublicDealRows(
+  projectIds: string[],
+): Promise<Map<string, PublicDealRow>> {
+  const wanted = new Set<string>();
+  for (const id of projectIds) addProjectIdAliases(wanted, id);
+
+  const existingByAlias = new Map<string, PublicDealRow>();
+  for (const row of await listAllPublicDeals()) {
+    const aliases = new Set<string>();
+    addProjectIdAliases(aliases, publicDealProjectId(row));
+    addProjectIdAliases(aliases, row.pk_value);
+    if (![...aliases].some((id) => wanted.has(id))) continue;
+    for (const alias of aliases) existingByAlias.set(alias, row);
+  }
+  return existingByAlias;
+}
+
+function preserveExistingEmail(
+  row: Record<string, ProjectPayloadValue>,
+  existingRows: Map<string, PublicDealRow>,
+): void {
+  if (row.email !== undefined) return;
+  const projectId = typeof row.project_id === "string" ? row.project_id : "";
+  if (!projectId) return;
+  const existingEmail = existingRows.get(projectId)?.project?.email;
+  if (typeof existingEmail === "string" && existingEmail.trim()) {
+    row.email = existingEmail.trim();
+  }
+}
+
+async function upsertProjects(rows: Record<string, ProjectPayloadValue>[]): Promise<void> {
   if (rows.length === 0) return;
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
     const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE).map(sanitizeRow);
@@ -434,6 +619,35 @@ async function upsertProjects(rows: Record<string, string | number | null>[]): P
       ),
     );
   }
+}
+
+function publicDealAliases(row: PublicDealRow): Set<string> {
+  const aliases = new Set<string>();
+  addProjectIdAliases(aliases, publicDealProjectId(row));
+  addProjectIdAliases(aliases, row.pk_value);
+  return aliases;
+}
+
+function publicDealDeleteId(row: PublicDealRow): string {
+  const pk = row.pk_value?.trim();
+  if (pk) return pk;
+  return publicDealProjectId(row).replace(/^hubspot_/, "");
+}
+
+async function deleteStaleIllumRows(projectIdsToKeep: string[]): Promise<number> {
+  const keepAliases = new Set<string>();
+  for (const id of projectIdsToKeep) addProjectIdAliases(keepAliases, id);
+
+  const stale = (await listPublicDeals("illum")).filter((row) => {
+    const aliases = publicDealAliases(row);
+    return ![...aliases].some((id) => keepAliases.has(id));
+  });
+
+  for (const row of stale) {
+    await deletePublicDeal("illum", publicDealDeleteId(row));
+  }
+
+  return stale.length;
 }
 
 async function runHubSpotSync(
@@ -459,6 +673,7 @@ async function runHubSpotSync(
       }
     }
     const { deals, maxLastModifiedMs } = await fetchDealsIncremental(token, sinceMs);
+    const contactByDealId = await loadDealContactDirectory(token, deals);
     const ownerIds = new Set<string>();
     for (const deal of deals) {
       const p = deal.properties;
@@ -469,10 +684,10 @@ async function runHubSpotSync(
     }
     await hydrateMissingOwners(token, ownerDirectory, [...ownerIds]);
 
-    const mapped: Record<string, string | number | null>[] = [];
+    const mapped: Record<string, ProjectPayloadValue>[] = [];
     let skipped = 0;
     for (const deal of deals) {
-      const row = mapDealToProjectRow(deal, labels, ownerDirectory, config);
+      const row = mapIllumDealToProjectRow(deal, labels, ownerDirectory, contactByDealId);
       if (!row) {
         skipped++;
         continue;
@@ -483,7 +698,8 @@ async function runHubSpotSync(
     const projectIds = mapped
       .map((row) => row.project_id)
       .filter((v): v is string => typeof v === "string");
-    const existing = await fetchExistingProjectIds(projectIds);
+    const existing = await fetchExistingPublicDealRows(projectIds);
+    for (const row of mapped) preserveExistingEmail(row, existing);
     let inserted = 0;
     let updated = 0;
     for (const id of projectIds) {
@@ -492,6 +708,7 @@ async function runHubSpotSync(
     }
 
     await upsertProjects(mapped);
+    const staleDeleted = fullRefresh ? await deleteStaleIllumRows(projectIds) : 0;
 
     const lastModifiedAt =
       maxLastModifiedMs != null ? new Date(maxLastModifiedMs).toISOString() : null;
@@ -502,6 +719,7 @@ async function runHubSpotSync(
       inserted,
       updated,
       skipped,
+      staleDeleted,
       lastModifiedAt,
     };
   } catch (err) {

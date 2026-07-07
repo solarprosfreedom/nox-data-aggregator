@@ -1,4 +1,7 @@
-import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
+import {
+  syncPublicDealFromHub,
+  type PublicDealSyncInput,
+} from "@/lib/data-hub/public-deals-sync";
 import { listAllPublicDeals, publicDealProjectId } from "@/lib/public-deals/client";
 
 const TAPE_API_BASE = "https://api.tapeapp.com";
@@ -7,12 +10,12 @@ const UPSERT_CHUNK_SIZE = 500;
 const PROJECT_ID_PREFIX = "tape_owe_";
 const INSTALLER_VALUE = "OWE";
 
-type TapeField = {
+export type TapeField = {
   external_id?: string;
   values?: Array<Record<string, unknown>>;
 };
 
-type TapeRecord = {
+export type TapeRecord = {
   record_id: number;
   fields?: TapeField[];
 };
@@ -194,15 +197,19 @@ async function fetchAllTapeRecords(token: string, viewId: number): Promise<TapeR
   return all;
 }
 
-function mapTapeRecordToProject(record: TapeRecord): Record<string, string | number | null> | null {
+export function mapTapeRecordToProject(
+  record: TapeRecord,
+): Record<string, string | number | null> | null {
   if (!Number.isFinite(record.record_id)) return null;
 
-  const customerName = pickFirst(textField(record, "customer_name"), textField(record, "our_"));
+  const pid = textField(record, "our_");
+  const customerName = textField(record, "customer_name");
   const { firstName, lastName } = splitName(customerName);
 
   return {
-    project_id: `${PROJECT_ID_PREFIX}${record.record_id}`,
-    opportunity_name: customerName,
+    tape_record_id: record.record_id,
+    project_id: pickFirst(pid, `${PROJECT_ID_PREFIX}${record.record_id}`),
+    opportunity_name: pickFirst(customerName, pid),
     first_name: firstName,
     last_name: lastName,
     address_line1: addressPart(record, "street_address"),
@@ -231,6 +238,20 @@ function mapTapeRecordToProject(record: TapeRecord): Record<string, string | num
   };
 }
 
+export function buildTapeOwePublicDealSyncInput(
+  row: Record<string, string | number | null>,
+): PublicDealSyncInput {
+  const { tape_record_id: tapeRecordId, ...project } = row;
+  return {
+    installer: typeof project.installer === "string" ? project.installer : INSTALLER_VALUE,
+    project,
+    vendorKey:
+      tapeRecordId == null || tapeRecordId === ""
+        ? undefined
+        : { tape_record_id: String(tapeRecordId) },
+  };
+}
+
 async function fetchExistingProjectIds(projectIds: string[]): Promise<Set<string>> {
   const wanted = new Set(projectIds);
   return new Set(
@@ -246,10 +267,7 @@ async function upsertProjects(rows: Record<string, string | number | null>[]): P
     const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE).map(sanitizeRow);
     await Promise.all(
       chunk.map((project) =>
-        syncPublicDealFromHub({
-          installer: typeof project.installer === "string" ? project.installer : INSTALLER_VALUE,
-          project,
-        }),
+        syncPublicDealFromHub(buildTapeOwePublicDealSyncInput(project)),
       ),
     );
   }

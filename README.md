@@ -62,7 +62,7 @@ Set `DATA_HUB_API_KEY` in `.env.local`.
 - Set `HUB_SPOT_ILLUM` to your HubSpot private app token.
 - Set `CRON_SECRET` and use the same value in your cron caller.
 - Cron endpoint: `POST /api/cron/hubspot-illum-sync`
-- Optional full backfill run: `POST /api/cron/hubspot-illum-sync?full_refresh=1`
+- Optional full backfill/prune run: `POST /api/cron/hubspot-illum-sync?full_refresh=1`
 - Scheduled every 15 minutes via `vercel.json`.
 
 ## Tape OWE recurring sync
