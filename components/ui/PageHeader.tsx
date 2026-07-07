@@ -12,17 +12,17 @@ export default function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-2.5">
         {icon && (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-700">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-orange-600 shadow-sm ring-1 ring-orange-100">
             {icon}
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-950">{title}</h1>
           {description && (
-            <p className="mt-0.5 max-w-2xl text-sm text-slate-500">{description}</p>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p>
           )}
         </div>
       </div>

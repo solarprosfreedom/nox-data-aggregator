@@ -58,17 +58,21 @@ function NavItem({
     <Link
       href={href}
       prefetch={true}
-      className={`group flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+      aria-current={active ? "page" : undefined}
+      className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
         active
-          ? "bg-orange-50 text-orange-900 ring-1 ring-orange-100"
-          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          ? "bg-white text-slate-950 shadow-sm ring-1 ring-orange-100"
+          : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
       }`}
     >
+      {active && (
+        <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-orange-500" />
+      )}
       <span
         className={`flex h-7 w-7 items-center justify-center rounded-md transition ${
           active
-            ? "bg-orange-100 text-orange-700"
-            : "bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-slate-700"
+            ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20"
+            : "bg-white text-slate-500 ring-1 ring-slate-200 group-hover:text-orange-700 group-hover:ring-orange-200"
         }`}
       >
         {icon}
@@ -91,10 +95,10 @@ export default function AppShell({
   const NAV = isAdmin ? ADMIN_NAV : MEMBER_NAV;
 
   return (
-    <div className="flex min-h-screen bg-slate-50/80">
-      <aside className="flex w-60 flex-col border-r border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-5">
-          <div className="flex items-center gap-2">
+    <div className="flex min-h-screen bg-[#f6f7fb]">
+      <aside className="flex w-64 flex-col border-r border-orange-100 bg-[#fff7f1] shadow-[1px_0_0_rgba(248,90,50,0.04)]">
+        <div className="border-b border-orange-100/80 px-4 py-5">
+          <div className="rounded-lg border border-orange-100 bg-white px-3 py-2 shadow-sm">
             <Image
               src="/logo.png"
               alt="NOX PWR"
@@ -103,17 +107,17 @@ export default function AppShell({
               className="h-[34px] w-auto object-contain"
             />
           </div>
-          <p className="mt-2 text-xs font-medium uppercase tracking-wider text-slate-400">
+          <p className="mt-3 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-700/70">
             Data Hub
           </p>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1.5 p-3">
           <Link
             href="/apps"
             prefetch={true}
-            className="mb-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+            className="mb-3 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-white/70 hover:text-slate-950"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-500">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-500 ring-1 ring-slate-200">
               <IconApps size={16} />
             </span>
             All apps
@@ -141,12 +145,12 @@ export default function AppShell({
             />
           )}
         </nav>
-        <div className="border-t border-slate-200 p-3">
-          <p className="truncate px-3 text-xs text-slate-400">{email}</p>
+        <div className="border-t border-orange-100/80 p-3">
+          <p className="truncate px-3 text-xs font-medium text-slate-500">{email}</p>
           <form action={signOutAction}>
             <button
               type="submit"
-              className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-50"
+              className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-600 transition hover:bg-white/70 hover:text-slate-950"
             >
               <IconLogOut size={16} className="text-slate-400" />
               Sign out
@@ -154,7 +158,7 @@ export default function AppShell({
           </form>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
+      <main className="flex-1 overflow-y-auto px-6 py-6 lg:px-8">{children}</main>
     </div>
   );
 }
