@@ -522,7 +522,10 @@ export function mapIllumDealToProjectRow(
     email: contact?.email?.trim() || undefined,
     phone: contact?.phone?.trim() || p.phone_number?.trim() || null,
     project_stage: stageLabel,
-    contract_signed_date: toDateOnly(p.closedate),
+    // Omit (rather than send explicit null) when HubSpot's closedate is
+    // empty, so routine syncs don't clobber a value backfilled from deal
+    // stage history (see preserveExistingContractSignedDate below).
+    contract_signed_date: toDateOnly(p.closedate) ?? undefined,
     total_system_cost: parseNumber(p.amount) ?? parseNumber(p.contract),
     system_size_kw: parseNumber(p.system_size_in_kw),
     setter_name: setterName,
@@ -606,6 +609,46 @@ function preserveExistingEmail(
   }
 }
 
+/**
+ * contract_signed_date is often backfilled from HubSpot deal-stage history
+ * (see scripts/backfill-illum-contract-signed-date.ts) when HubSpot's own
+ * `closedate` property is empty. Since this sync always PUTs the full
+ * project object, actively carry forward whatever value already exists in
+ * Lovable whenever our own source (closedate) has nothing, so routine syncs
+ * don't overwrite a backfilled date with null.
+ */
+function preserveExistingContractSignedDate(
+  row: Record<string, ProjectPayloadValue>,
+  existingRows: Map<string, PublicDealRow>,
+): void {
+  if (row.contract_signed_date !== undefined) return;
+  const projectId = typeof row.project_id === "string" ? row.project_id : "";
+  if (!projectId) return;
+  const existingDate = existingRows.get(projectId)?.project?.contract_signed_date;
+  if (typeof existingDate === "string" && existingDate.trim()) {
+    row.contract_signed_date = existingDate.trim();
+  }
+}
+
+/**
+ * Lovable's public-deals endpoint silently ignores writes to
+ * `project.system_size_kw` on this table — the only field that actually
+ * persists system size for Illum is `remittance.pv_size` (confirmed via
+ * scripts/backfill-illum-system-size.ts). Mirror that value into remittance
+ * on every routine sync so it stays live without needing a manual backfill.
+ * A value of 0 (or missing) is treated as "no data", matching HubSpot's own
+ * export convention where blank/zero means unset.
+ */
+function buildRemittanceForRow(
+  project: Record<string, ProjectPayloadValue>,
+): Record<string, unknown> | undefined {
+  const size = project.system_size_kw;
+  if (typeof size === "number" && Number.isFinite(size) && size > 0) {
+    return { pv_size: size };
+  }
+  return undefined;
+}
+
 async function upsertProjects(rows: Record<string, ProjectPayloadValue>[]): Promise<void> {
   if (rows.length === 0) return;
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
@@ -615,6 +658,7 @@ async function upsertProjects(rows: Record<string, ProjectPayloadValue>[]): Prom
         syncPublicDealFromHub({
           installer: typeof project.installer === "string" ? project.installer : "Illum",
           project,
+          remittance: buildRemittanceForRow(project),
         }),
       ),
     );
@@ -632,6 +676,65 @@ function publicDealDeleteId(row: PublicDealRow): string {
   const pk = row.pk_value?.trim();
   if (pk) return pk;
   return publicDealProjectId(row).replace(/^hubspot_/, "");
+}
+
+// HubSpot doesn't expose "Date entered <stage>" as a normal deal property
+// (that's only computed by HubSpot's own CSV/report export) — but the same
+// data can be derived from dealstage property history. Used as a fallback
+// for contract_signed_date when HubSpot's own `closedate` is empty and
+// there's no existing Lovable value to carry forward (i.e. a genuinely new
+// gap, typically a brand-new deal). See also
+// scripts/backfill-illum-contract-signed-date.ts, which does this in bulk.
+const CONTRACT_SIGNED_STAGE_ID = "1728507";
+
+async function fetchDealStageHistory(
+  token: string,
+  dealId: string,
+): Promise<{ value: string; timestamp: string }[]> {
+  const res = await fetch(
+    `${HUBSPOT_BASE_URL}/crm/v3/objects/deals/${encodeURIComponent(dealId)}?properties=dealstage&propertiesWithHistory=dealstage`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) {
+    if (res.status === 404) return [];
+    throw new Error(`HubSpot ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  }
+  const body = (await res.json()) as {
+    propertiesWithHistory?: { dealstage?: { value: string; timestamp: string }[] };
+  };
+  return body.propertiesWithHistory?.dealstage ?? [];
+}
+
+async function deriveContractSignedDatesFromStageHistory(
+  token: string,
+  rows: Record<string, ProjectPayloadValue>[],
+): Promise<void> {
+  const targets = rows.filter(
+    (r) => r.contract_signed_date === undefined && typeof r.project_id === "string",
+  );
+  for (const row of targets) {
+    const dealId = String(row.project_id).replace(
+      new RegExp(`^${ILLUM_SYNC_CONFIG.projectIdPrefix}`),
+      "",
+    );
+    try {
+      const history = await fetchDealStageHistory(token, dealId);
+      const entries = history
+        .filter((h) => h.value === CONTRACT_SIGNED_STAGE_ID)
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      if (entries.length > 0) {
+        row.contract_signed_date = entries[0].timestamp.slice(0, 10);
+      }
+    } catch {
+      // Best-effort: leave undefined on lookup failure; will retry next cycle
+      // since the deal keeps getting picked up by the incremental sync until
+      // its own hs_lastmodifieddate stops advancing.
+    }
+    // Be gentle with HubSpot's rate limits; this path only runs for the
+    // small number of rows still missing a date after the Lovable-side
+    // preserve check, not the whole batch.
+    await new Promise((r) => setTimeout(r, 120));
+  }
 }
 
 async function deleteStaleIllumRows(projectIdsToKeep: string[]): Promise<number> {
@@ -699,7 +802,11 @@ async function runHubSpotSync(
       .map((row) => row.project_id)
       .filter((v): v is string => typeof v === "string");
     const existing = await fetchExistingPublicDealRows(projectIds);
-    for (const row of mapped) preserveExistingEmail(row, existing);
+    for (const row of mapped) {
+      preserveExistingEmail(row, existing);
+      preserveExistingContractSignedDate(row, existing);
+    }
+    await deriveContractSignedDatesFromStageHistory(token, mapped);
     let inserted = 0;
     let updated = 0;
     for (const id of projectIds) {

@@ -41,9 +41,13 @@ export async function syncPublicDealFromHub(input: PublicDealSyncInput) {
     );
   }
 
+  // Lovable's PUT endpoint fully replaces the `remittance` JSON blob rather
+  // than merging it, so omit the key entirely when we have nothing to write
+  // — sending `remittance: {}` would silently wipe out any previously
+  // backfilled remittance fields (e.g. pv_size) on every routine sync.
   const remittance = input.remittance
     ? compactPublicDealObject(input.remittance)
-    : {};
+    : undefined;
 
   const payload: PublicDealPayload = {
     vendor_key:
@@ -81,11 +85,13 @@ export async function patchPublicDealFromHub(input: PublicDealSyncInput) {
     );
   }
 
+  // Same reasoning as syncPublicDealFromHub: never send an empty remittance
+  // object, since Lovable replaces (not merges) it on write.
   const payload: PublicDealPayload = {
     project,
     remittance: input.remittance
       ? compactPublicDealObject(input.remittance)
-      : {},
+      : undefined,
     source: {
       file_name: input.source?.fileName ?? undefined,
       row_number: input.source?.rowNumber,
