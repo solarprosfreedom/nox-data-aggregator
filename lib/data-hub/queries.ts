@@ -42,7 +42,8 @@ export type Project = {
   office_name: string | null;
   installer: string | null;
   terros_account_id: string | null;
-  sequifi_sale_id: string | null;
+  /** Sequifi's external upsert key. It can differ from this project's ID. */
+  sequifi_pid: string | null;
   sequifi_job_status: string | null;
   sequifi_synced_at: string | null;
   setter_sequifi_employee_id: string | null;
@@ -273,7 +274,7 @@ export function mapPublicDealRow(row: PublicDealRow): ProjectWithRemittance {
     office_name: strOrNull(p.office_name),
     installer: strOrNull(p.installer) ?? row.installer,
     terros_account_id: strOrNull(p.terros_account_id),
-    sequifi_sale_id: strOrNull(p.sequifi_sale_id),
+    sequifi_pid: strOrNull(p.sequifi_pid),
     sequifi_job_status: strOrNull(p.sequifi_job_status),
     sequifi_synced_at: strOrNull(p.sequifi_synced_at),
     setter_sequifi_employee_id: strOrNull(p.setter_sequifi_employee_id),

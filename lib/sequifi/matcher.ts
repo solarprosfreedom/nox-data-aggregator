@@ -1,6 +1,6 @@
 // Links `projects` rows to Sequifi sales.
 //
-// Link priority: existing sequifi_sale_id -> project_id == pid -> normalized
+// Link priority: stored Sequifi PID -> project_id == pid -> normalized
 // customer name. Names that map to more than one sale are flagged ambiguous and
 // never auto-linked (avoids corrupting a record on a coincidental name clash).
 
@@ -46,10 +46,10 @@ export type ProjectForMatch = {
   id: string;
   project_id: string | null;
   opportunity_name: string | null;
-  sequifi_sale_id: string | null;
+  sequifi_pid: string | null;
 };
 
-export type MatchedBy = "sale_id" | "pid" | "name";
+export type MatchedBy = "stored_pid" | "pid" | "name";
 
 export type MatchOutcome =
   | { kind: "matched"; sale: SequifiSale; matchedBy: MatchedBy }
@@ -60,10 +60,10 @@ export function matchProjectToSale(
   project: ProjectForMatch,
   index: SalesIndex
 ): MatchOutcome {
-  const existing = project.sequifi_sale_id?.trim();
+  const existing = project.sequifi_pid?.trim();
   if (existing) {
     const sale = index.byPid.get(existing);
-    if (sale) return { kind: "matched", sale, matchedBy: "sale_id" };
+    if (sale) return { kind: "matched", sale, matchedBy: "stored_pid" };
   }
 
   const pid = project.project_id?.trim();

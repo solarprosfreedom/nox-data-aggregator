@@ -18,7 +18,7 @@ type ProjectRow = {
   id: string;
   project_id: string | null;
   opportunity_name: string | null;
-  sequifi_sale_id: string | null;
+  sequifi_pid: string | null;
   state_code: string | null;
   address_line1: string | null;
   postal_code: string | null;
@@ -85,7 +85,7 @@ async function linkPushedProjects(
             installer: item.installer,
             project: {
               project_id: item.projectId,
-              sequifi_sale_id: item.pid,
+              sequifi_pid: item.pid,
               sequifi_job_status: item.sequifi_job_status,
               sequifi_synced_at: syncedAt,
             },

@@ -1,98 +1,36 @@
 import { config } from "dotenv";
 import { resolve } from "path";
-import { createClient } from "@supabase/supabase-js";
 import { runSequifiSync } from "../lib/sequifi/sync";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
-async function analyzeReadiness() {
-  const db = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-
-  const all: Record<string, unknown>[] = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await db
-      .from("projects")
-      .select(
-        "project_id,opportunity_name,system_size_kw,contract_signed_date,state_code,sequifi_sale_id",
-      )
-      .range(from, from + 999);
-    if (error) throw error;
-    all.push(...(data ?? []));
-    if ((data?.length ?? 0) < 1000) break;
-    from += 1000;
-  }
-
-  let missingName = 0;
-  let missingKw = 0;
-  let missingDate = 0;
-  let missingState = 0;
-  let missingAny = 0;
-  let hasSequifiId = 0;
-
-  for (const r of all) {
-    const name =
-      typeof r.opportunity_name === "string" && r.opportunity_name.trim();
-    const kw = r.system_size_kw;
-    const date = r.contract_signed_date;
-    const state = typeof r.state_code === "string" && r.state_code.trim();
-    const badName = !name;
-    const badKw = kw == null;
-    const badDate = !date;
-    const badState = !state;
-    if (badName) missingName++;
-    if (badKw) missingKw++;
-    if (badDate) missingDate++;
-    if (badState) missingState++;
-    if (badName || badKw || badDate || badState) missingAny++;
-    if (r.sequifi_sale_id) hasSequifiId++;
-  }
-
-  console.log("=== Hub readiness (Sequifi required fields) ===");
-  console.log(`Total projects:              ${all.length}`);
-  console.log(`Already linked (sequifi_sale_id): ${hasSequifiId}`);
-  console.log(`Missing customer name:       ${missingName}`);
-  console.log(`Missing system size (kW):    ${missingKw}`);
-  console.log(`Missing contract date:       ${missingDate}`);
-  console.log(`Missing state:               ${missingState}`);
-  console.log(`Missing ANY (would skip push): ${missingAny}`);
-  console.log(`Ready to push (all 4 fields):  ${all.length - missingAny}`);
-}
-
 async function main() {
-  await analyzeReadiness();
-
-  console.log("\n=== Sync Sequifi DRY RUN ===");
-  const r = await runSequifiSync({ dryRun: true });
-  if ("error" in r) {
-    console.error("ERROR:", r.error);
-    process.exit(1);
+  const result = await runSequifiSync({ dryRun: true });
+  if ("error" in result) {
+    throw new Error(result.error);
   }
 
-  console.log(`Projects scanned:     ${r.projectsScanned}`);
-  console.log(`Sequifi sales:        ${r.sequifiSales}`);
-  console.log(`Would UPDATE Sequifi: ${r.pushedUpdate} (matched existing sales)`);
-  console.log(`Would CREATE Sequifi: ${r.pushedNew} (new hub projects)`);
-  console.log(`Skipped (missing fields): ${r.skippedMissingFields}`);
-  console.log(`Skipped (ambiguous name): ${r.ambiguous}`);
-  console.log(`Linked existing matches:  ${r.linkedExisting}`);
+  console.log("=== Endpoint-to-Sequifi dry run ===");
+  console.log(`Projects scanned: ${result.projectsScanned}`);
+  console.log(`Sequifi sales: ${result.sequifiSales}`);
+  console.log(`Would update: ${result.pushedUpdate}`);
+  console.log(`Would create: ${result.pushedNew}`);
+  console.log(`Missing required fields: ${result.skippedMissingFields}`);
+  console.log(`Ambiguous matches: ${result.ambiguous}`);
 
-  if (r.samples.update.length) {
+  if (result.samples.update.length) {
     console.log("\nSample updates:");
-    r.samples.update.forEach((s) => console.log(`  ${s}`));
+    result.samples.update.forEach((sample) => console.log(`  ${sample}`));
   }
-  if (r.samples.create.length) {
+  if (result.samples.create.length) {
     console.log("\nSample creates:");
-    r.samples.create.forEach((s) => console.log(`  ${s}`));
+    result.samples.create.forEach((sample) => console.log(`  ${sample}`));
   }
 
-  console.log("\nNothing was written (dry run).");
+  console.log("\nNo data was written.");
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

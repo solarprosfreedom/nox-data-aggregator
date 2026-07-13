@@ -75,7 +75,10 @@ export async function GET(request: NextRequest) {
         },
         external_ids: {
           terros_account_id: r.terros_account_id,
-          sequifi_sale_id: r.sequifi_sale_id,
+          sequifi_pid: r.sequifi_pid,
+          // Legacy response name retained for API compatibility. The endpoint
+          // source now stores Sequifi's upsert PID, not a numeric sale ID.
+          sequifi_sale_id: r.sequifi_pid,
         },
         org: {
           market: r.market,
