@@ -3,6 +3,7 @@
  *
  * Usage:
  *   node scripts/sync-terros-missing.mjs --all          # full scan (all workflow stages)
+ *   node scripts/sync-terros-missing.mjs --stage Closed # scan one exact workflow stage
  *   node scripts/sync-terros-missing.mjs --from 2026-06-01
  *   node scripts/sync-terros-missing.mjs --all --dry-run
  *   node scripts/sync-terros-missing.mjs --all --update-existing
@@ -22,6 +23,7 @@ const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const allStages = args.includes("--all");
 const updateExisting = args.includes("--update-existing") || args.includes("--refresh");
+const stageArg = args.find((a, i) => args[i - 1] === "--stage");
 const fromArg = args.find((a, i) => args[i - 1] === "--from") ?? JUNE_START_DEFAULT;
 
 const terrosBase = (process.env.TERROS_API_BASE_URL ?? "https://api.terros.com").replace(
@@ -322,6 +324,35 @@ async function syncAllStages(existingIds, seenInRun, stats) {
   }
 }
 
+async function syncSelectedStage(existingIds, seenInRun, stats, requestedStage) {
+  const stageNeedle = requestedStage.trim().toLowerCase();
+  if (!stageNeedle) throw new Error("--stage requires an exact stage name or stage ID");
+
+  const stages = await fetchAllStageIds();
+  const matches = stages.filter(
+    (stage) =>
+      stage.id.toLowerCase() === stageNeedle ||
+      stage.name.trim().toLowerCase() === stageNeedle
+  );
+
+  if (!matches.length) {
+    throw new Error(`No Terros workflow stage matched: ${requestedStage}`);
+  }
+
+  console.log(
+    `Scanning ${matches.length} matching workflow stage${matches.length === 1 ? "" : "s"}: ${matches.map((stage) => stage.name).join(", ")}…`
+  );
+
+  for (const stage of matches) {
+    let page = 0;
+    for await (const rows of paginateStage(stage.id)) {
+      page += 1;
+      stats.pages += 1;
+      await processRows(rows, existingIds, seenInRun, stats, `${stage.name} p${page}`);
+    }
+  }
+}
+
 async function syncDateRange(existingIds, seenInRun, stats) {
   console.log(
     `Scanning lastActionDate ${new Date(rangeStartMs).toISOString()} → ${new Date(rangeEndMs).toISOString()}…`
@@ -338,8 +369,9 @@ async function syncDateRange(existingIds, seenInRun, stats) {
 }
 
 async function main() {
+  const scope = stageArg ? `stage: ${stageArg}` : allStages ? "all stages" : "date range";
   console.log(
-    `Terros → Supabase sync${dryRun ? " (dry run)" : ""} [${allStages ? "all stages" : "date range"}${updateExisting ? ", update existing" : ", insert missing only"}]\n`
+    `Terros → Supabase sync${dryRun ? " (dry run)" : ""} [${scope}${updateExisting ? ", update existing" : ", insert missing only"}]\n`
   );
 
   const existingIds = await loadExistingAccountIds();
@@ -356,7 +388,9 @@ async function main() {
     failed: 0,
   };
 
-  if (allStages) {
+  if (stageArg) {
+    await syncSelectedStage(existingIds, seenInRun, stats, stageArg);
+  } else if (allStages) {
     await syncAllStages(existingIds, seenInRun, stats);
   } else {
     await syncDateRange(existingIds, seenInRun, stats);
