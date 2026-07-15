@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/sequifi-sync",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/coperniq-tron-sync",
+      "schedule": "12,27,42,57 * * * *"
     }
   ]
 }

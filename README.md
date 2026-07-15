@@ -88,6 +88,13 @@ Set `DATA_HUB_API_KEY` in `.env.local`.
 - Accepts Coperniq `application/json` webhook payloads and stores the exact raw body plus parsed normalized fields in `coperniq_webhooks`.
 - Auth is optional. Leave `COPERNIQ_WEBHOOK_SECRET` blank for Coperniq's no-auth setup, or set it and pass the value as `x-coperniq-webhook-secret`, `x-webhook-secret`, bearer token, `?secret=`, or `?token=`.
 
+## Coperniq → Tron recurring sync
+
+- Set `COPERNIQ_API_KEY` to the Coperniq Projects API key and reuse the existing `PUBLIC_DEALS_API_KEY` plus `CRON_SECRET` values.
+- Sync endpoint: `POST /api/cron/coperniq-tron-sync`.
+- It paginates all Coperniq projects, inserts missing Tron records, updates mapped source fields, and preserves existing remittance fields that Coperniq does not provide.
+- Vercel runs it every 15 minutes at minutes 12, 27, 42, and 57.
+
 ## Architecture
 
 - **`hub_projects`** — unified project/deal records
