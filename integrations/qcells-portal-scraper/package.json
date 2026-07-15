@@ -1,0 +1,21 @@
+{
+  "name": "qcells-portal-scraper",
+  "version": "0.1.0",
+  "description": "Authenticated data extraction for the Qcells Partner Portal (Salesforce Experience Cloud / LWR)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "login": "node src/login.js",
+    "discover": "node src/login.js --discover",
+    "extract": "node src/extract.js",
+    "extract:leads": "node src/extract-leads.js",
+    "extract:opportunities": "node src/extract-opportunities.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.48.0"
+  }
+}
