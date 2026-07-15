@@ -27,6 +27,7 @@ test("mapCoperniqProjectToTron maps project and finance fields without losing th
       ownership_type: ["Lease"],
       financing_provider: ["Sunrun"],
       utility_company: ["Ameren"],
+      ahj: ["Monticello township"],
       system_size_stc_dc_kw: 12.6,
       gross_contract_price: 62150.88,
       gross_ppw: 4.93260992,
@@ -47,6 +48,7 @@ test("mapCoperniqProjectToTron maps project and finance fields without losing th
     email: "justin@example.com",
     phone: "+12177142810",
     project_stage: "Initiation",
+    contract_signed_date: "2026-05-13",
     total_system_cost: 62150.88,
     system_size_kw: 12.6,
     sales_advisor_name: "Clint Feinauer",
@@ -67,7 +69,7 @@ test("mapCoperniqProjectToTron maps project and finance fields without losing th
     ppw: 0.17313643,
     contract_date: "2026-05-13",
   });
-  assert.equal(mapped.rawRow.ahj, "Ameren");
+  assert.equal(mapped.rawRow.ahj, "Monticello township");
   assert.equal(mapped.rawRow.site_address, "1010 E North St, Monticello, IL, 61856");
   assert.equal(mapped.rawRow.setter_name, "Sally Setter");
   assert.equal(mapped.rawRow.setter_email, "sally@example.com");

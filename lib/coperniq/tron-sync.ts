@@ -143,6 +143,16 @@ function hasChanged(current: JsonRecord, next: JsonRecord) {
   return Object.entries(next).some(([key, value]) => !valueEquals(current[key], value));
 }
 
+// The public endpoint only writes these explicit legacy Tron columns from source.raw_row.
+// Keep the routine sync idempotent by comparing only the raw fields it can persist.
+function legacyTronRawFields(rawRow: JsonRecord): JsonRecord {
+  return compact({
+    status: rawRow.status,
+    site_address: rawRow.site_address,
+    ahj: rawRow.ahj,
+  });
+}
+
 function identityName(row: PublicDealRow) {
   const project = row.project ?? {};
   return normalizeText(
@@ -223,6 +233,7 @@ export function mapCoperniqProjectToTron(
   const title = stringValue(project.title);
   const contractDate = dateOnly(custom.contract_signed_date);
   const utilityProvider = firstListValue(custom.utility_company);
+  const ahj = firstListValue(custom.ahj);
   const siteAddress = stringValue(project.address?.[0]) ?? stringValue(project.street);
   const setterName = personName(project.owner);
   const setterEmail = stringValue(
@@ -240,6 +251,7 @@ export function mapCoperniqProjectToTron(
       email: stringValue(project.primaryEmail),
       phone: stringValue(project.primaryPhone),
       project_stage: stringValue(project.phase?.name) ?? stringValue(project.workflowName) ?? stringValue(project.status),
+      contract_signed_date: contractDate,
       total_system_cost: currency(project.value),
       system_size_kw: project.size ?? undefined,
       sales_advisor_name: personName(project.salesRep),
@@ -279,8 +291,7 @@ export function mapCoperniqProjectToTron(
       setter_email: setterEmail,
       description: project.description,
       last_activity: project.lastActivity,
-      // Requested Tron legacy mapping: Coperniq utility company → ahj.
-      ahj: utilityProvider,
+      ahj,
       source_created_at: project.createdAt,
       source_updated_at: project.updatedAt,
       site_address: siteAddress,
@@ -342,7 +353,11 @@ export async function runCoperniqTronSync(options: { dryRun: boolean }): Promise
     if (existing) {
       const mergedProject = { ...(existing.project ?? {}), ...mapped.project };
       const mergedRemittance = { ...(existing.remittance ?? {}), ...mapped.remittance };
-      if (!hasChanged(existing.project ?? {}, mapped.project) && !hasChanged(existing.remittance ?? {}, mapped.remittance)) {
+      if (
+        !hasChanged(existing.project ?? {}, mapped.project) &&
+        !hasChanged(existing.remittance ?? {}, mapped.remittance) &&
+        !hasChanged(existing.raw ?? {}, legacyTronRawFields(mapped.rawRow))
+      ) {
         result.unchanged += 1;
         continue;
       }
