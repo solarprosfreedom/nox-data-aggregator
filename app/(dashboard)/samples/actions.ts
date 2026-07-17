@@ -17,9 +17,11 @@ import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
 import {
   listAllPublicDeals,
   invalidatePublicDealsCache,
+  installerToPublicDealVendor,
   publicDealProjectId,
   type PublicDealRow,
 } from "@/lib/public-deals/client";
+import { recordPublicImportLog } from "@/lib/public-imports/client";
 
 export type UploadSampleResult =
   | { ok: true; id: string; rowCount: number; columnCount: number }
@@ -156,6 +158,20 @@ export async function importWithMapping(
   invalidatePublicDealsCache();
   revalidatePath("/dashboard");
   revalidatePath("/projects");
+  revalidatePath("/imports/history");
+
+  const publicImportSource = installerToPublicDealVendor(installer);
+  if (publicImportSource) {
+    await recordPublicImportLog({
+      source: publicImportSource,
+      row_count: rows.length,
+      inserted_count: inserted,
+      updated_count: updated,
+      filename: String(fileName ?? "manual"),
+      trigger_source: "dashboard_field_mapper",
+      error: errorMessages.slice(0, 20).join("; ") || undefined,
+    });
+  }
 
   return {
     inserted,

@@ -17,9 +17,11 @@ import {
 } from "@/lib/data-hub/public-deals-sync";
 import {
   listAllPublicDeals,
+  installerToPublicDealVendor,
   publicDealProjectId,
   type PublicDealRow,
 } from "@/lib/public-deals/client";
+import { recordPublicImportLog } from "@/lib/public-imports/client";
 
 export type ImportResult = {
   importId: string;
@@ -227,6 +229,20 @@ export async function processImport(options: {
         completed_at: new Date().toISOString(),
       })
       .eq("id", importId);
+
+    const publicImportSource =
+      source === "projects_sheet" ? installerToPublicDealVendor(batchInstaller) : null;
+    if (publicImportSource) {
+      await recordPublicImportLog({
+        source: publicImportSource,
+        row_count: rowCount,
+        inserted_count: inserted,
+        updated_count: updated,
+        filename: fileName,
+        trigger_source: "dashboard_csv_upload",
+        error: errorMessages.slice(0, 20).join("; ") || undefined,
+      });
+    }
 
     return {
       importId,

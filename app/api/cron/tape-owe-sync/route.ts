@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { isCronAuthorized, shouldExecuteCron } from "@/lib/cron/authorize";
 import { runTapeOweSync } from "@/lib/tape/owe-sync";
+import { recordPublicImportLog } from "@/lib/public-imports/client";
+
+async function recordOweResult(result: Awaited<ReturnType<typeof runTapeOweSync>>) {
+  await recordPublicImportLog({
+    source: "owe",
+    row_count: result.fetched,
+    inserted_count: result.inserted,
+    updated_count: result.updated,
+    filename: "Tape OWE sync",
+    trigger_source: "cron",
+  });
+}
 
 export async function GET(request: NextRequest) {
   if (!shouldExecuteCron(request)) {
@@ -13,6 +26,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await runTapeOweSync();
+    await recordOweResult(result);
+    revalidatePath("/imports/history");
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     return NextResponse.json(
@@ -29,6 +44,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await runTapeOweSync();
+    await recordOweResult(result);
+    revalidatePath("/imports/history");
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     return NextResponse.json(

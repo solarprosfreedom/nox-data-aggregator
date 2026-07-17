@@ -1,5 +1,5 @@
 import { listImportHistory } from "@/lib/data-hub/queries";
-import { IMPORT_SOURCE_LABELS, type ImportSource } from "@/lib/data-hub/normalize";
+import type { PublicImportSource } from "@/lib/public-imports/client";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -44,39 +44,25 @@ export async function ImportHistoryTable() {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {logs.map((log) => {
-            const sourceKey = String(log.source) as ImportSource;
-            const isRemittance = sourceKey === "remittance";
+            const sourceKey = log.source as PublicImportSource;
             return (
-              <tr key={log.id as string}>
+              <tr key={log.id}>
                 <td className="px-4 py-3 text-xs text-slate-500">
-                  {new Date(String(log.created_at)).toLocaleString()}
+                  {log.created_at ? new Date(log.created_at).toLocaleString() : "—"}
                 </td>
                 <td className="px-4 py-3 text-xs font-medium">
-                  {IMPORT_SOURCE_LABELS[sourceKey] ?? sourceKey}
+                  {sourceKey}
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-600">
-                  {String(log.file_name)}
+                  {log.filename ?? "—"}
                 </td>
-                <td className="px-4 py-3 text-xs">{String(log.row_count)}</td>
+                <td className="px-4 py-3 text-xs">{log.row_count}</td>
                 <td className="px-4 py-3 text-xs">
-                  {isRemittance ? (
-                    <>
-                      {String(log.inserted_count)} saved
-                      {Number(log.matched_count) > 0
-                        ? `, ${log.matched_count} linked`
-                        : ""}
-                      {log.error_count ? `, ${log.error_count} err` : ""}
-                    </>
-                  ) : (
-                    <>
-                      {String(log.inserted_count)} new,{" "}
-                      {String(log.updated_count)} updated
-                      {log.error_count ? `, ${log.error_count} err` : ""}
-                    </>
-                  )}
+                  {log.inserted_count} new, {log.updated_count} updated
+                  {log.error ? ", error" : ""}
                 </td>
                 <td className="px-4 py-3">
-                  <StatusBadge status={String(log.status)} />
+                  <StatusBadge status={log.error ? "failed" : "completed"} />
                 </td>
               </tr>
             );

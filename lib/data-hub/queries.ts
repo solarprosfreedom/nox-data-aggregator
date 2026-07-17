@@ -1,4 +1,3 @@
-import { createServerSupabase } from "@/lib/supabase/server";
 import { unstable_cache } from "next/cache";
 import {
   parseProjectSort,
@@ -11,6 +10,7 @@ import {
   type ParsedColumnFilters,
 } from "@/lib/data-hub/column-filters";
 import { listAllPublicDealsCached, type PublicDealRow } from "@/lib/public-deals/client";
+import { listPublicImportHistory } from "@/lib/public-imports/client";
 
 export type Project = {
   id: string;
@@ -479,18 +479,7 @@ export async function listRemittance(limit = 500, search?: string) {
 }
 
 export async function listImportHistory(limit = 50) {
-  const db = createServerSupabase();
-  const { data, error } = await db
-    .from("hub_import_log")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    if (error.message.includes("hub_import_log")) return [];
-    throw new Error(error.message);
-  }
-  return data ?? [];
+  return listPublicImportHistory({ limit });
 }
 
 export async function countProjects() {
