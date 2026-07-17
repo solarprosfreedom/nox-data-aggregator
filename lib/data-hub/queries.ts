@@ -1,3 +1,4 @@
+import { createServerSupabase } from "@/lib/supabase/server";
 import { unstable_cache } from "next/cache";
 import {
   parseProjectSort,
@@ -10,7 +11,10 @@ import {
   type ParsedColumnFilters,
 } from "@/lib/data-hub/column-filters";
 import { listAllPublicDealsCached, type PublicDealRow } from "@/lib/public-deals/client";
-import { listPublicImportHistory } from "@/lib/public-imports/client";
+import {
+  listPublicImportHistory,
+  type PublicImportLog,
+} from "@/lib/public-imports/client";
 
 export type Project = {
   id: string;
@@ -478,8 +482,121 @@ export async function listRemittance(limit = 500, search?: string) {
   return rows.slice(0, limit);
 }
 
+export type ImportHistoryLog = {
+  id: string;
+  source: string;
+  row_count: number;
+  inserted_count: number;
+  updated_count: number;
+  matched_count: number;
+  error_count: number;
+  filename: string | null;
+  trigger_source: string | null;
+  error: string | null;
+  status: string;
+  created_at: string | null;
+};
+
+function importCount(value: unknown): number {
+  const count = Number(value);
+  return Number.isFinite(count) ? count : 0;
+}
+
+function importString(value: unknown): string | null {
+  if (value == null) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function mapPublicImportHistory(log: PublicImportLog): ImportHistoryLog {
+  return {
+    ...log,
+    matched_count: 0,
+    error_count: log.error ? 1 : 0,
+    status: log.error ? "failed" : "completed",
+  };
+}
+
+function mapLegacyImportHistory(row: Record<string, unknown>, index: number): ImportHistoryLog {
+  const source = importString(row.source) ?? "legacy";
+  const createdAt = importString(row.created_at);
+  return {
+    id: `legacy-${importString(row.id) ?? `${source}-${createdAt ?? index}`}`,
+    source,
+    row_count: importCount(row.row_count),
+    inserted_count: importCount(row.inserted_count),
+    updated_count: importCount(row.updated_count),
+    matched_count: importCount(row.matched_count),
+    error_count: importCount(row.error_count),
+    filename: importString(row.file_name),
+    trigger_source: null,
+    error: importString(row.error_summary),
+    status: importString(row.status) ?? "completed",
+    created_at: createdAt,
+  };
+}
+
+export function mergeImportHistory(
+  publicLogs: PublicImportLog[],
+  legacyRows: Record<string, unknown>[],
+  limit: number,
+): ImportHistoryLog[] {
+  const timestamp = (value: ImportHistoryLog) => {
+    const time = value.created_at ? new Date(value.created_at).getTime() : Number.NaN;
+    return Number.isFinite(time) ? time : 0;
+  };
+  const importedPublicLogs = publicLogs.map(mapPublicImportHistory);
+  const legacyLogs = legacyRows.map(mapLegacyImportHistory).filter((legacyLog) => {
+    // New dashboard CSV uploads continue to use hub_import_log internally for
+    // their processing lifecycle, then create the public installer record.
+    // Hide that same operation's legacy row while retaining older history.
+    return !importedPublicLogs.some((publicLog) => {
+      if (publicLog.trigger_source !== "dashboard_csv_upload") return false;
+      if (!publicLog.filename || publicLog.filename !== legacyLog.filename) return false;
+      if (
+        publicLog.row_count !== legacyLog.row_count ||
+        publicLog.inserted_count !== legacyLog.inserted_count ||
+        publicLog.updated_count !== legacyLog.updated_count
+      ) {
+        return false;
+      }
+      return Math.abs(timestamp(publicLog) - timestamp(legacyLog)) < 5 * 60 * 1000;
+    });
+  });
+
+  return [...importedPublicLogs, ...legacyLogs]
+    .sort((left, right) => timestamp(right) - timestamp(left))
+    .slice(0, limit);
+}
+
+async function listLegacyImportHistory(limit: number): Promise<Record<string, unknown>[]> {
+  try {
+    const db = createServerSupabase();
+    const { data, error } = await db
+      .from("hub_import_log")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      if (error.message.includes("hub_import_log")) return [];
+      throw new Error(error.message);
+    }
+    return (data ?? []) as Record<string, unknown>[];
+  } catch (error) {
+    // The public installer history remains usable in deployments that no longer
+    // have the legacy hub table or service-role configuration.
+    if (error instanceof Error && error.message.includes("Missing SUPABASE")) return [];
+    throw error;
+  }
+}
+
 export async function listImportHistory(limit = 50) {
-  return listPublicImportHistory({ limit });
+  const [publicLogs, legacyRows] = await Promise.all([
+    listPublicImportHistory({ limit }),
+    listLegacyImportHistory(limit),
+  ]);
+  return mergeImportHistory(publicLogs, legacyRows, limit);
 }
 
 export async function countProjects() {

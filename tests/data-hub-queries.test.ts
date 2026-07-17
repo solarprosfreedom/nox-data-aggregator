@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapPublicDealRow } from "@/lib/data-hub/queries";
+import { mapPublicDealRow, mergeImportHistory } from "@/lib/data-hub/queries";
 import type { PublicDealRow } from "@/lib/public-deals/client";
 
 function row(overrides: Partial<PublicDealRow> = {}): PublicDealRow {
@@ -134,4 +134,66 @@ test("mapPublicDealRow preserves meaningful remittance fields and parses numbers
   assert.equal(mapped.remittance.c0, 1000.5);
   assert.equal(mapped.remittance.c1_paid, 500);
   assert.equal(mapped.remittance.gross_ppw, 3.8);
+});
+
+test("mergeImportHistory combines public and legacy rows in newest-first order", () => {
+  const logs = mergeImportHistory(
+    [
+      {
+        id: "public-1",
+        source: "tron",
+        row_count: 10,
+        inserted_count: 2,
+        updated_count: 8,
+        filename: "tron.csv",
+        trigger_source: "cron",
+        error: null,
+        created_at: "2026-07-18T12:00:00.000Z",
+      },
+      {
+        id: "public-upload",
+        source: "axia",
+        row_count: 6,
+        inserted_count: 1,
+        updated_count: 5,
+        filename: "axia.csv",
+        trigger_source: "dashboard_csv_upload",
+        error: null,
+        created_at: "2026-07-18T14:00:00.000Z",
+      },
+    ],
+    [
+      {
+        id: "legacy-1",
+        source: "remittance",
+        row_count: 5,
+        inserted_count: 5,
+        updated_count: 0,
+        matched_count: 4,
+        error_count: 1,
+        file_name: "remittance.csv",
+        status: "partial",
+        created_at: "2026-07-18T13:00:00.000Z",
+      },
+      {
+        id: "legacy-upload",
+        source: "projects_sheet",
+        row_count: 6,
+        inserted_count: 1,
+        updated_count: 5,
+        file_name: "axia.csv",
+        status: "completed",
+        created_at: "2026-07-18T14:00:01.000Z",
+      },
+    ],
+    10,
+  );
+
+  assert.equal(logs.length, 3);
+  assert.equal(logs[0]?.id, "public-upload");
+  assert.equal(logs[1]?.id, "legacy-legacy-1");
+  assert.equal(logs[2]?.id, "public-1");
+  assert.equal(logs[1]?.status, "partial");
+  assert.equal(logs[1]?.matched_count, 4);
+  assert.equal(logs[2]?.status, "completed");
 });

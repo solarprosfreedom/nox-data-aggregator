@@ -1,5 +1,5 @@
 import { listImportHistory } from "@/lib/data-hub/queries";
-import type { PublicImportSource } from "@/lib/public-imports/client";
+import { IMPORT_SOURCE_LABELS, type ImportSource } from "@/lib/data-hub/normalize";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -44,25 +44,36 @@ export async function ImportHistoryTable() {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {logs.map((log) => {
-            const sourceKey = log.source as PublicImportSource;
+            const sourceKey = log.source as ImportSource;
+            const isRemittance = sourceKey === "remittance";
             return (
               <tr key={log.id}>
                 <td className="px-4 py-3 text-xs text-slate-500">
                   {log.created_at ? new Date(log.created_at).toLocaleString() : "—"}
                 </td>
                 <td className="px-4 py-3 text-xs font-medium">
-                  {sourceKey}
+                  {IMPORT_SOURCE_LABELS[sourceKey] ?? sourceKey}
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-600">
                   {log.filename ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-xs">{log.row_count}</td>
                 <td className="px-4 py-3 text-xs">
-                  {log.inserted_count} new, {log.updated_count} updated
-                  {log.error ? ", error" : ""}
+                  {isRemittance ? (
+                    <>
+                      {log.inserted_count} saved
+                      {log.matched_count > 0 ? `, ${log.matched_count} linked` : ""}
+                      {log.error_count > 0 ? `, ${log.error_count} err` : ""}
+                    </>
+                  ) : (
+                    <>
+                      {log.inserted_count} new, {log.updated_count} updated
+                      {log.error_count > 0 ? `, ${log.error_count} err` : ""}
+                    </>
+                  )}
                 </td>
                 <td className="px-4 py-3">
-                  <StatusBadge status={log.error ? "failed" : "completed"} />
+                  <StatusBadge status={log.status} />
                 </td>
               </tr>
             );
