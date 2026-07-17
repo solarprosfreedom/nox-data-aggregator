@@ -161,6 +161,17 @@ test("mergeImportHistory combines public and legacy rows in newest-first order",
         error: null,
         created_at: "2026-07-18T14:00:00.000Z",
       },
+      {
+        id: "public-cron",
+        source: "tron",
+        row_count: 177,
+        inserted_count: 0,
+        updated_count: 171,
+        filename: "Coperniq API /v1/projects",
+        trigger_source: "cron",
+        error: null,
+        created_at: "2026-07-18T15:00:00.000Z",
+      },
     ],
     [
       {

@@ -550,6 +550,10 @@ function mapLegacyImportHistory(row: Record<string, unknown>, index: number): Im
   };
 }
 
+function isCsvImport(log: ImportHistoryLog): boolean {
+  return log.filename?.trim().toLowerCase().endsWith(".csv") ?? false;
+}
+
 export function mergeImportHistory(
   publicLogs: PublicImportLog[],
   legacyRows: Record<string, unknown>[],
@@ -559,8 +563,9 @@ export function mergeImportHistory(
     const time = value.created_at ? new Date(value.created_at).getTime() : Number.NaN;
     return Number.isFinite(time) ? time : 0;
   };
-  const importedPublicLogs = publicLogs.map(mapPublicImportHistory);
+  const importedPublicLogs = publicLogs.map(mapPublicImportHistory).filter(isCsvImport);
   const legacyLogs = legacyRows.map(mapLegacyImportHistory).filter((legacyLog) => {
+    if (!isCsvImport(legacyLog)) return false;
     // New dashboard CSV uploads continue to use hub_import_log internally for
     // their processing lifecycle, then create the public installer record.
     // Hide that same operation's legacy row while retaining older history.
@@ -607,7 +612,10 @@ async function listLegacyImportHistory(limit: number): Promise<Record<string, un
 
 export async function listImportHistory(limit = 50) {
   const [publicLogs, legacyRows] = await Promise.all([
-    listPublicImportHistory({ limit }),
+    // Cron records can dominate the newest rows in the public service. Fetch
+    // enough history to retain the requested number of CSV imports after they
+    // are filtered out below.
+    listPublicImportHistory({ limit: Math.max(limit * 5, 500) }),
     listLegacyImportHistory(limit),
   ]);
   return mergeImportHistory(publicLogs, legacyRows, limit);
