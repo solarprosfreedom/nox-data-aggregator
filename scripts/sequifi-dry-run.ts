@@ -15,7 +15,8 @@ async function main() {
   console.log(`Sequifi sales: ${result.sequifiSales}`);
   console.log(`Would update: ${result.pushedUpdate}`);
   console.log(`Would create: ${result.pushedNew}`);
-  console.log(`Missing required fields: ${result.skippedMissingFields}`);
+  console.log(`New deals missing required fields: ${result.skippedMissingFields}`);
+  console.log(`Empty existing updates: ${result.skippedEmptyUpdates}`);
   console.log(`Ambiguous matches: ${result.ambiguous}`);
 
   if (result.samples.update.length) {

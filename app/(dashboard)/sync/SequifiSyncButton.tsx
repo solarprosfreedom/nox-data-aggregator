@@ -74,7 +74,8 @@ export default function SequifiSyncButton() {
             <Stat label="Created in Sequifi" value={result.pushedNew} color="emerald" />
             <Stat label="Linked to existing" value={result.linkedExisting} color="slate" />
             <Stat label="Ambiguous (skipped)" value={result.ambiguous} color="amber" />
-            <Stat label="Missing fields (skipped)" value={result.skippedMissingFields} color="amber" />
+            <Stat label="New deals missing fields" value={result.skippedMissingFields} color="amber" />
+            <Stat label="Empty existing updates" value={result.skippedEmptyUpdates} color="amber" />
             <Stat label="Errors" value={result.errors} color={result.errors > 0 ? "red" : "slate"} />
           </div>
 

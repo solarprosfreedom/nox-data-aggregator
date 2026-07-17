@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildSequifiUpsertRecord } from "@/lib/sequifi/build-upsert-record";
+import {
+  buildSequifiExistingUpdateRecord,
+  buildSequifiUpsertRecord,
+} from "@/lib/sequifi/build-upsert-record";
 import type { RemittanceSummary } from "@/lib/data-hub/queries";
 
 const project = {
@@ -116,4 +119,36 @@ test("buildSequifiUpsertRecord sends date_cancelled only for canceled jobs", () 
   );
   assert.ok(canceled);
   assert.equal(canceled.date_cancelled, "2026-07-01");
+});
+
+test("buildSequifiExistingUpdateRecord permits a partial existing-PID merge", () => {
+  const record = buildSequifiExistingUpdateRecord(
+    {
+      ...project,
+      opportunity_name: null,
+      state_code: null,
+      address_line1: null,
+      postal_code: null,
+      system_size_kw: null,
+      contract_signed_date: null,
+      total_system_cost: null,
+      installer: null,
+      setter_name: null,
+      setter_email: null,
+      closer_name: null,
+      closer_email: null,
+      sales_advisor_name: null,
+      sales_advisor_email: null,
+      setter_sequifi_employee_id: null,
+      closer_sequifi_employee_id: null,
+    },
+    "EXISTING-1",
+    null,
+  );
+
+  assert.deepEqual(record, {
+    pid: "EXISTING-1",
+    job_status: "Install",
+    net_epc: 3.1,
+  });
 });

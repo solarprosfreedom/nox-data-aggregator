@@ -10,7 +10,11 @@ import {
   matchesColumnFilter,
   type ParsedColumnFilters,
 } from "@/lib/data-hub/column-filters";
-import { listAllPublicDealsCached, type PublicDealRow } from "@/lib/public-deals/client";
+import {
+  listAllPublicDeals,
+  listAllPublicDealsCached,
+  type PublicDealRow,
+} from "@/lib/public-deals/client";
 import {
   listPublicImportHistory,
   type PublicImportLog,
@@ -311,6 +315,16 @@ function dedupeEndpointProjects(rows: ProjectWithRemittance[]) {
 
 export async function listEndpointProjects(): Promise<ProjectWithRemittance[]> {
   const rows = await listAllPublicDealsCached();
+  return dedupeEndpointProjects(rows.map(mapPublicDealRow));
+}
+
+/**
+ * Fetches the complete current endpoint data for an external write operation.
+ * Syncing must not use the dashboard's small cached pages: a large account can
+ * otherwise exceed the server-function time limit before it reaches Sequifi.
+ */
+export async function listEndpointProjectsFresh(): Promise<ProjectWithRemittance[]> {
+  const rows = await listAllPublicDeals();
   return dedupeEndpointProjects(rows.map(mapPublicDealRow));
 }
 

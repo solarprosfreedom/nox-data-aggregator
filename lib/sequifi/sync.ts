@@ -7,9 +7,12 @@ import {
   buildSalesIndex,
   matchProjectToSale,
 } from "@/lib/sequifi/matcher";
-import { buildSequifiUpsertRecord } from "@/lib/sequifi/build-upsert-record";
 import {
-  listEndpointProjects,
+  buildSequifiExistingUpdateRecord,
+  buildSequifiUpsertRecord,
+} from "@/lib/sequifi/build-upsert-record";
+import {
+  listEndpointProjectsFresh,
   type RemittanceSummary,
 } from "@/lib/data-hub/queries";
 import { patchPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
@@ -46,13 +49,27 @@ export type SequifiSyncResult = {
   pushedNew: number;
   linkedExisting: number;
   ambiguous: number;
+  /** New deals that cannot satisfy Sequifi's Solar insert validation. */
   skippedMissingFields: number;
+  /** Existing PIDs with no non-empty source values available to merge. */
+  skippedEmptyUpdates: number;
   errors: number;
   errorMessages: string[];
   samples: { update: string[]; create: string[] };
 };
 
 export type SequifiSyncResponse = SequifiSyncResult | { error: string };
+
+export type SequifiSyncAuditEntry = {
+  projectId: string;
+  opportunityName: string | null;
+  sequifiPid: string;
+  action: "created" | "updated";
+  sequifiApplied: true;
+  sourceLinked: boolean;
+  sourceLinkError?: string;
+  syncedAt: string;
+};
 
 const LINK_PARALLEL = 40;
 
@@ -62,6 +79,7 @@ async function linkPushedProjects(
     installer: string | null;
     pid: string;
     isNew: boolean;
+    opportunityName: string | null;
     sequifi_job_status: string | null;
   }[],
   succeededPids: Set<string>,
@@ -70,11 +88,13 @@ async function linkPushedProjects(
   pushedNew: number;
   pushedUpdate: number;
   errors: { id: string; message: string }[];
+  audit: SequifiSyncAuditEntry[];
 }> {
   const toLink = pushApply.filter((item) => succeededPids.has(item.pid));
   let pushedNew = 0;
   let pushedUpdate = 0;
   const errors: { id: string; message: string }[] = [];
+  const audit: SequifiSyncAuditEntry[] = [];
 
   for (let i = 0; i < toLink.length; i += LINK_PARALLEL) {
     const chunk = toLink.slice(i, i + LINK_PARALLEL);
@@ -101,19 +121,44 @@ async function linkPushedProjects(
     );
 
     for (const { item, error } of results) {
-      if (error) errors.push({ id: item.projectId, message: error.message });
-      else if (item.isNew) pushedNew++;
-      else pushedUpdate++;
+      if (error) {
+        errors.push({ id: item.projectId, message: error.message });
+        audit.push({
+          projectId: item.projectId,
+          opportunityName: item.opportunityName,
+          sequifiPid: item.pid,
+          action: item.isNew ? "created" : "updated",
+          sequifiApplied: true,
+          sourceLinked: false,
+          sourceLinkError: error.message,
+          syncedAt,
+        });
+      } else {
+        if (item.isNew) pushedNew++;
+        else pushedUpdate++;
+        audit.push({
+          projectId: item.projectId,
+          opportunityName: item.opportunityName,
+          sequifiPid: item.pid,
+          action: item.isNew ? "created" : "updated",
+          sequifiApplied: true,
+          sourceLinked: true,
+          syncedAt,
+        });
+      }
     }
   }
 
-  return { pushedNew, pushedUpdate, errors };
+  return { pushedNew, pushedUpdate, errors, audit };
 }
 
 export async function runSequifiSync({
   dryRun,
+  onApplied,
 }: {
   dryRun: boolean;
+  /** Receives each confirmed Sequifi write after its source deal is linked. */
+  onApplied?: (entries: SequifiSyncAuditEntry[]) => void | Promise<void>;
 }): Promise<SequifiSyncResponse> {
   const result: SequifiSyncResult = {
     dryRun,
@@ -124,13 +169,14 @@ export async function runSequifiSync({
     linkedExisting: 0,
     ambiguous: 0,
     skippedMissingFields: 0,
+    skippedEmptyUpdates: 0,
     errors: 0,
     errorMessages: [],
     samples: { update: [], create: [] },
   };
 
   try {
-    const projects = (await listEndpointProjects()) as Array<
+    const projects = (await listEndpointProjectsFresh()) as Array<
       ProjectRow & { remittance: RemittanceSummary | null }
     >;
     result.projectsScanned = projects.length;
@@ -150,6 +196,7 @@ export async function runSequifiSync({
       installer: string | null;
       pid: string;
       isNew: boolean;
+      opportunityName: string | null;
       sequifi_job_status: string | null;
     }[] = [];
 
@@ -164,14 +211,13 @@ export async function runSequifiSync({
       if (m.kind === "matched") {
         result.linkedExisting++;
         const pid = m.sale.pid;
-        const rec = buildSequifiUpsertRecord(
+        const rec = buildSequifiExistingUpdateRecord(
           p,
           pid,
-          false,
           p.project_id ? remittanceByProject.get(p.project_id) ?? null : null,
         );
         if (!rec) {
-          result.skippedMissingFields++;
+          result.skippedEmptyUpdates++;
           continue;
         }
         pushRecords.push(rec);
@@ -180,6 +226,7 @@ export async function runSequifiSync({
           installer: p.installer,
           pid,
           isNew: false,
+          opportunityName: p.opportunity_name,
           sequifi_job_status: rec.job_status ?? m.sale.job_status,
         });
         if (result.samples.update.length < 10) {
@@ -205,6 +252,7 @@ export async function runSequifiSync({
           installer: p.installer,
           pid,
           isNew: true,
+          opportunityName: p.opportunity_name,
           sequifi_job_status: rec.job_status ?? "Signed",
         });
         if (result.samples.create.length < 10) {
@@ -240,6 +288,18 @@ export async function runSequifiSync({
       for (const e of linked.errors) {
         if (result.errorMessages.length < 15) {
           result.errorMessages.push(`link ${e.id}: ${e.message}`);
+        }
+      }
+      if (linked.audit.length && onApplied) {
+        try {
+          await onApplied(linked.audit);
+        } catch (error) {
+          result.errors++;
+          if (result.errorMessages.length < 15) {
+            result.errorMessages.push(
+              `audit log: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
         }
       }
     }

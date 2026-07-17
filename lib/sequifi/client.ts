@@ -3,10 +3,11 @@
 // Read:  GET  /v1/sales            -> paginated list (data.Sales[])
 // Write: POST /v1/sales            -> upsert by `pid` (body: { data: [ ... ] })
 //
-// Confirmed against the live API:
+// Sequifi's documented write behavior:
 //  - Upsert is keyed on `pid` (no duplicates created for an existing pid).
-//  - Solar records require: pid, customer_name, kw, customer_signoff,
-//    customer_state, location_code ({STATE}.{InstallerCode}, e.g. CA.Axia).
+//  - New Solar PIDs require customer_name, kw, customer_signoff,
+//    customer_state, and location_code ({STATE}.{InstallerCode}, e.g. CA.Axia).
+//    Existing PIDs support partial merge updates.
 //  - Hub pushes sale detail only; remittance/M1/M2/M3 stay in the hub.
 //  - Validation failures return HTTP 400 with data.errors[] strings that are
 //    prefixed "Record [i]: ..." so we can isolate the offending records.
@@ -132,11 +133,11 @@ export async function fetchAllSequifiSales(): Promise<SequifiSale[]> {
 
 export type SequifiUpsertRecord = {
   pid: string;
-  customer_name: string;
-  kw: number;
-  customer_signoff: string; // YYYY-MM-DD
-  customer_state: string;
-  location_code: string;
+  customer_name?: string;
+  kw?: number;
+  customer_signoff?: string; // YYYY-MM-DD
+  customer_state?: string;
+  location_code?: string;
   gross_account_value?: number | null;
   install_partner?: string | null;
   job_status?: string | null;
@@ -166,8 +167,16 @@ export type UpsertOutcome = {
   errors: { pid: string; message: string }[];
 };
 
+type RejectedRecord = { pid: string | null; message: string };
+
 type ChunkResult =
-  | { ok: true; inserted: number; patched: number; processed: number }
+  | {
+      ok: true;
+      inserted: number;
+      patched: number;
+      processed: number;
+      rejected: RejectedRecord[];
+    }
   | { ok: false; message: string; failedIndices?: Set<number>; indexMessages?: Map<number, string> };
 
 function sleep(ms: number): Promise<void> {
@@ -183,7 +192,9 @@ async function postChunk(records: SequifiUpsertRecord[]): Promise<ChunkResult> {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({ data: records }),
+    // A bad insert should not prevent valid creates or partial updates in the
+    // same chunk from being applied.
+    body: JSON.stringify({ data: records, partial_success: true }),
     cache: "no-store",
   });
   const text = await res.text();
@@ -195,6 +206,27 @@ async function postChunk(records: SequifiUpsertRecord[]): Promise<ChunkResult> {
     /* keep parsed empty; fall through to error handling */
   }
   const data = (parsed.data ?? {}) as Record<string, unknown>;
+  const rawRejected = Array.isArray(parsed.rejected)
+    ? parsed.rejected
+    : Array.isArray(data.rejected)
+      ? data.rejected
+      : [];
+  const rejected: RejectedRecord[] = rawRejected.map((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return { pid: null, message: String(entry) };
+    }
+    const row = entry as Record<string, unknown>;
+    const index = toNum(row.index ?? row.record_index ?? row.recordIndex);
+    const indexedPid = index != null ? records[index]?.pid ?? null : null;
+    const pid =
+      (typeof row.pid === "string" && row.pid.trim()) ||
+      indexedPid ||
+      null;
+    const message =
+      (typeof row.message === "string" && row.message) ||
+      (Array.isArray(row.errors) ? row.errors.map(String).join("; ") : "Sequifi rejected record");
+    return { pid, message };
+  });
 
   if (res.ok) {
     return {
@@ -202,6 +234,7 @@ async function postChunk(records: SequifiUpsertRecord[]): Promise<ChunkResult> {
       inserted: toNum(data.recordsInserted) ?? 0,
       patched: toNum(data.recordsPatched) ?? 0,
       processed: toNum(data.recordsProcessed) ?? records.length,
+      rejected,
     };
   }
 
@@ -256,7 +289,28 @@ export async function upsertSequifiSales(
       out.inserted += result.inserted;
       out.patched += result.patched;
       out.processed += result.processed;
-      for (const r of chunk) out.succeededPids.add(r.pid);
+      const rejectedPids = new Set<string>();
+      const hasUnmappedRejection = result.rejected.some((rejection) => !rejection.pid);
+      for (const rejection of result.rejected) {
+        if (rejection.pid) {
+          rejectedPids.add(rejection.pid);
+          out.errors.push({ pid: rejection.pid, message: rejection.message });
+        }
+      }
+
+      // Do not mark a chunk as linked when Sequifi reports a rejection without
+      // identifying its record. That keeps the source endpoint authoritative.
+      if (hasUnmappedRejection) {
+        for (const r of chunk) {
+          if (!rejectedPids.has(r.pid)) {
+            out.errors.push({ pid: r.pid, message: "Sequifi returned an unmapped rejected record" });
+          }
+        }
+      } else {
+        for (const r of chunk) {
+          if (!rejectedPids.has(r.pid)) out.succeededPids.add(r.pid);
+        }
+      }
     } else if (result.failedIndices && result.failedIndices.size < chunk.length) {
       const good: SequifiUpsertRecord[] = [];
       chunk.forEach((rec, idx) => {

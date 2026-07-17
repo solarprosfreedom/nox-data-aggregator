@@ -82,22 +82,52 @@ export function buildSequifiUpsertRecord(
   isNew: boolean,
   remit: RemittanceSummary | null,
 ): SequifiUpsertRecord | null {
+  return buildSequifiRecord(project, pid, isNew, remit, true);
+}
+
+/**
+ * Builds a partial update for an existing Sequifi PID. Existing sales merge
+ * only the fields included in the request, so missing new-sale fields must not
+ * prevent available data from being updated.
+ */
+export function buildSequifiExistingUpdateRecord(
+  project: ProjectForSequifiUpsert,
+  pid: string,
+  remit: RemittanceSummary | null,
+): SequifiUpsertRecord | null {
+  return buildSequifiRecord(project, pid, false, remit, false);
+}
+
+function buildSequifiRecord(
+  project: ProjectForSequifiUpsert,
+  pid: string,
+  isNew: boolean,
+  remit: RemittanceSummary | null,
+  requireNewSaleFields: boolean,
+): SequifiUpsertRecord | null {
   const customer_name = project.opportunity_name?.trim();
   const kw = project.system_size_kw;
   const customer_signoff = fmtDate(project.contract_signed_date);
   const customer_state = resolveStateCode(project);
-  if (!customer_name || kw == null || !customer_signoff || !customer_state) {
+  if (
+    requireNewSaleFields &&
+    (!customer_name || kw == null || !customer_signoff || !customer_state)
+  ) {
     return null;
   }
 
-  const rec: SequifiUpsertRecord = {
-    pid,
-    customer_name,
-    kw,
-    customer_signoff,
-    customer_state,
-    location_code: sequifiLocationCode(customer_state, project.installer),
-  };
+  const rec: SequifiUpsertRecord = { pid };
+  if (customer_name) rec.customer_name = customer_name;
+  if (kw != null) rec.kw = kw;
+  if (customer_signoff) rec.customer_signoff = customer_signoff;
+  if (customer_state) {
+    rec.customer_state = customer_state;
+    // For an existing PID, omit the location rather than replacing an existing
+    // correct value with an inferred ".Unknown" location.
+    if (requireNewSaleFields || project.installer?.trim()) {
+      rec.location_code = sequifiLocationCode(customer_state, project.installer);
+    }
+  }
 
   if (project.total_system_cost != null) {
     rec.gross_account_value = project.total_system_cost;
@@ -150,5 +180,5 @@ export function buildSequifiUpsertRecord(
     rec.net_epc = round2(num(project.net_epc)!);
   }
 
-  return rec;
+  return Object.keys(rec).length > 1 ? rec : null;
 }
