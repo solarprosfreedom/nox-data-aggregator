@@ -20,11 +20,19 @@ export type PublicDealSyncInput = {
   };
 };
 
+function compactProjectPayload(project: Record<string, unknown>) {
+  const payload = compactPublicDealObject(project);
+  // Installer selects the vendor endpoint; it is not part of the endpoint's
+  // supported nested project schema.
+  delete payload.installer;
+  return payload;
+}
+
 export async function syncPublicDealFromHub(input: PublicDealSyncInput) {
   const installer =
     input.installer ??
     (typeof input.project.installer === "string" ? input.project.installer : null);
-  const project = compactPublicDealObject(input.project);
+  const project = compactProjectPayload(input.project);
   if (!project.project_id) {
     throw new Error("Project ID is required for public deals sync");
   }
@@ -71,7 +79,7 @@ export async function patchPublicDealFromHub(input: PublicDealSyncInput) {
   const installer =
     input.installer ??
     (typeof input.project.installer === "string" ? input.project.installer : null);
-  const project = compactPublicDealObject(input.project);
+  const project = compactProjectPayload(input.project);
   const projectId = typeof project.project_id === "string" ? project.project_id.trim() : "";
   if (!projectId) throw new Error("Project ID is required for public deals sync");
 

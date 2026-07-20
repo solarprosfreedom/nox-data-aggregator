@@ -75,6 +75,7 @@ test("syncPublicDealFromHub writes normalized payloads to the vendor endpoint", 
     project: {
       project_id: "HES-1",
       opportunity_name: "Ada Lovelace",
+      installer: "Axia Solar Corp",
       email: "",
     },
     remittance: {
