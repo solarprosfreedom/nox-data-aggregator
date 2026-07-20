@@ -22,9 +22,11 @@ export type PublicDealSyncInput = {
 
 function compactProjectPayload(project: Record<string, unknown>) {
   const payload = compactPublicDealObject(project);
-  // Installer selects the vendor endpoint; it is not part of the endpoint's
-  // supported nested project schema.
+  // These fields are internal sync metadata, not part of the public endpoint's
+  // supported nested project schema. Installer selects the vendor endpoint,
+  // while updated_at is only used as the source-system sync watermark.
   delete payload.installer;
+  delete payload.updated_at;
   return payload;
 }
 

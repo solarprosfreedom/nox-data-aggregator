@@ -6,7 +6,10 @@ import {
   publicDealProjectId,
   type PublicDealRow,
 } from "@/lib/public-deals/client";
-import { syncPublicDealFromHub } from "@/lib/data-hub/public-deals-sync";
+import {
+  patchPublicDealFromHub,
+  syncPublicDealFromHub,
+} from "@/lib/data-hub/public-deals-sync";
 
 test("maps installer names to public deal vendors", () => {
   assert.equal(installerToPublicDealVendor("Axia Solar Corp"), "axia");
@@ -76,6 +79,7 @@ test("syncPublicDealFromHub writes normalized payloads to the vendor endpoint", 
       project_id: "HES-1",
       opportunity_name: "Ada Lovelace",
       installer: "Axia Solar Corp",
+      updated_at: "2026-07-21T03:31:07.700Z",
       email: "",
     },
     remittance: {
@@ -108,5 +112,54 @@ test("syncPublicDealFromHub writes normalized payloads to the vendor endpoint", 
       row_number: 12,
       raw_row: { Project: "HES-1" },
     },
+  });
+});
+
+test("patchPublicDealFromHub excludes internal project metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const originalBase = process.env.PUBLIC_DEALS_API_BASE;
+  const originalKey = process.env.PUBLIC_DEALS_API_KEY;
+  const calls: { url: string; init: RequestInit | undefined }[] = [];
+
+  process.env.PUBLIC_DEALS_API_BASE = "https://example.test/api/public/deals";
+  process.env.PUBLIC_DEALS_API_KEY = "test-key";
+  globalThis.fetch = async (input, init) => {
+    calls.push({ url: String(input), init });
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalBase == null) delete process.env.PUBLIC_DEALS_API_BASE;
+    else process.env.PUBLIC_DEALS_API_BASE = originalBase;
+    if (originalKey == null) delete process.env.PUBLIC_DEALS_API_KEY;
+    else process.env.PUBLIC_DEALS_API_KEY = originalKey;
+  });
+
+  await patchPublicDealFromHub({
+    installer: "Illum",
+    project: {
+      project_id: "hubspot_123",
+      project_stage: "Contract Signed",
+      installer: "Illum",
+      updated_at: "2026-07-21T03:31:07.700Z",
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].url,
+    "https://example.test/api/public/deals/illum?id=hubspot_123",
+  );
+  assert.equal(calls[0].init?.method, "PATCH");
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {
+    project: {
+      project_id: "hubspot_123",
+      project_stage: "Contract Signed",
+    },
+    source: {},
   });
 });
