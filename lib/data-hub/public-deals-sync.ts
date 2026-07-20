@@ -27,6 +27,18 @@ function compactProjectPayload(project: Record<string, unknown>) {
   // while updated_at is only used as the source-system sync watermark.
   delete payload.installer;
   delete payload.updated_at;
+
+  // The public endpoint rejects zero, negative, non-numeric, and non-finite
+  // system sizes. Treat those source values as missing so one incomplete deal
+  // cannot fail the entire sync batch.
+  const systemSizeKw = payload.system_size_kw;
+  if (
+    typeof systemSizeKw !== "number" ||
+    !Number.isFinite(systemSizeKw) ||
+    systemSizeKw <= 0
+  ) {
+    delete payload.system_size_kw;
+  }
   return payload;
 }
 

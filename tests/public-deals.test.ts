@@ -80,6 +80,7 @@ test("syncPublicDealFromHub writes normalized payloads to the vendor endpoint", 
       opportunity_name: "Ada Lovelace",
       installer: "Axia Solar Corp",
       updated_at: "2026-07-21T03:31:07.700Z",
+      system_size_kw: 6.8,
       email: "",
     },
     remittance: {
@@ -102,6 +103,7 @@ test("syncPublicDealFromHub writes normalized payloads to the vendor endpoint", 
     project: {
       project_id: "HES-1",
       opportunity_name: "Ada Lovelace",
+      system_size_kw: 6.8,
     },
     remittance: {
       c0: 100,
@@ -115,7 +117,7 @@ test("syncPublicDealFromHub writes normalized payloads to the vendor endpoint", 
   });
 });
 
-test("patchPublicDealFromHub excludes internal project metadata", async (t) => {
+test("patchPublicDealFromHub excludes internal metadata and invalid system size", async (t) => {
   const originalFetch = globalThis.fetch;
   const originalBase = process.env.PUBLIC_DEALS_API_BASE;
   const originalKey = process.env.PUBLIC_DEALS_API_KEY;
@@ -146,6 +148,7 @@ test("patchPublicDealFromHub excludes internal project metadata", async (t) => {
       project_stage: "Contract Signed",
       installer: "Illum",
       updated_at: "2026-07-21T03:31:07.700Z",
+      system_size_kw: 0,
     },
   });
 
