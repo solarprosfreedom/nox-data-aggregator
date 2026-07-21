@@ -44,6 +44,10 @@ export default async function ProjectsPage({
             <>
               <SyncSettersButton />
               <SequifiSyncInlineButton />
+              <ExportCsvButton
+                href="/api/export/illum-missing"
+                label="Export Illum gaps"
+              />
               <ExportCsvButton href={exportHref} />
               <Link
                 href="/imports"
