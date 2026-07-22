@@ -140,11 +140,23 @@ test("buildDashboardStats groups NTP with Notice to Proceed", () => {
       },
       remittance: null,
     },
+    {
+      vendor: "axia",
+      installer: "Axia",
+      pk: "hes_id",
+      pk_value: "HES-NTP-3",
+      project: {
+        project_id: "HES-NTP-3",
+        opportunity_name: "Checked NTP project",
+        project_stage: "✔ NTP",
+      },
+      remittance: null,
+    },
   ];
 
   const stats = buildDashboardStats(rows);
 
   assert.deepEqual(stats.stageStats, [
-    { label: "Notice to Proceed", count: 2 },
+    { label: "Notice to Proceed", count: 3 },
   ]);
 });

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   columnFilterParamKey,
   encodeColumnFilter,
+  encodeMultiSelectFilter,
 } from "@/lib/data-hub/column-filters";
 import type { CountStat } from "@/lib/data-hub/dashboard-stats";
 
@@ -139,11 +140,11 @@ function stageFilterHref(label: string) {
   } else if (normalized === "notice to proceed") {
     params.set(
       key,
-      encodeColumnFilter({
-        c1: { op: "eq", value: "Notice to Proceed" },
-        logic: "or",
-        c2: { op: "eq", value: "NTP" },
-      }),
+      encodeMultiSelectFilter([
+        "Notice to Proceed",
+        "NTP",
+        "✔ NTP",
+      ]),
     );
   } else {
     params.set(key, encodeColumnFilter({ c1: { op: "eq", value: label }, logic: "and" }));

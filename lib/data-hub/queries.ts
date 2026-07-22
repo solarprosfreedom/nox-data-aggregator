@@ -407,6 +407,11 @@ export async function listProjectsPaged(opts: {
   if (multiSelect.sales_rep?.length) {
     rows = rows.filter((row) => multiSelect.sales_rep!.includes(salesRepValue(row)));
   }
+  if (multiSelect.project_stage?.length) {
+    rows = rows.filter((row) =>
+      multiSelect.project_stage!.includes(row.project_stage ?? ""),
+    );
+  }
 
   for (const [id, filter] of Object.entries(advanced)) {
     if (!isColumnFilterActive(filter)) continue;

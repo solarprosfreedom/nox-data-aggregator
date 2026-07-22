@@ -47,9 +47,10 @@ function dashboardStageLabel(rawLabel: string | null | undefined) {
   const label = rawLabel?.trim();
   if (!label) return null;
   const normalized = label.toLowerCase();
-  if (normalized === "install" || normalized === "installation") return "Installation";
-  if (normalized === "cancelled" || normalized === "canceled") return "Cancelled";
-  if (normalized === "notice to proceed" || normalized === "ntp") {
+  const stageKey = normalized.replace(/^[✓✔]\s*/, "");
+  if (stageKey === "install" || stageKey === "installation") return "Installation";
+  if (stageKey === "cancelled" || stageKey === "canceled") return "Cancelled";
+  if (stageKey === "notice to proceed" || stageKey === "ntp") {
     return "Notice to Proceed";
   }
   return label;
