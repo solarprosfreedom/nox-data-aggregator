@@ -49,6 +49,9 @@ function dashboardStageLabel(rawLabel: string | null | undefined) {
   const normalized = label.toLowerCase();
   if (normalized === "install" || normalized === "installation") return "Installation";
   if (normalized === "cancelled" || normalized === "canceled") return "Cancelled";
+  if (normalized === "notice to proceed" || normalized === "ntp") {
+    return "Notice to Proceed";
+  }
   return label;
 }
 

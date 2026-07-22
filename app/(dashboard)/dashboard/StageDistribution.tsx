@@ -136,6 +136,15 @@ function stageFilterHref(label: string) {
         c2: { op: "eq", value: "cancelled" },
       }),
     );
+  } else if (normalized === "notice to proceed") {
+    params.set(
+      key,
+      encodeColumnFilter({
+        c1: { op: "eq", value: "Notice to Proceed" },
+        logic: "or",
+        c2: { op: "eq", value: "NTP" },
+      }),
+    );
   } else {
     params.set(key, encodeColumnFilter({ c1: { op: "eq", value: label }, logic: "and" }));
   }

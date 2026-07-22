@@ -113,3 +113,38 @@ test("buildDashboardStats returns every project stage bucket", () => {
     stats.totalProjects,
   );
 });
+
+test("buildDashboardStats groups NTP with Notice to Proceed", () => {
+  const rows: PublicDealRow[] = [
+    {
+      vendor: "axia",
+      installer: "Axia",
+      pk: "hes_id",
+      pk_value: "HES-NTP-1",
+      project: {
+        project_id: "HES-NTP-1",
+        opportunity_name: "NTP project",
+        project_stage: "NTP",
+      },
+      remittance: null,
+    },
+    {
+      vendor: "axia",
+      installer: "Axia",
+      pk: "hes_id",
+      pk_value: "HES-NTP-2",
+      project: {
+        project_id: "HES-NTP-2",
+        opportunity_name: "Notice project",
+        project_stage: "Notice to Proceed",
+      },
+      remittance: null,
+    },
+  ];
+
+  const stats = buildDashboardStats(rows);
+
+  assert.deepEqual(stats.stageStats, [
+    { label: "Notice to Proceed", count: 2 },
+  ]);
+});
